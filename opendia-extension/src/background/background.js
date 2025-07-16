@@ -1,8 +1,20 @@
+// Import WebExtension polyfill at the top
+if (typeof browser === 'undefined' && typeof chrome !== 'undefined') {
+  globalThis.browser = chrome;
+}
+
+// Browser detection
+const browserInfo = {
+  isFirefox: typeof browser !== 'undefined' && browser.runtime.getManifest().applications?.gecko,
+  isChrome: typeof chrome !== 'undefined' && !browser.runtime.getManifest().applications?.gecko,
+  isServiceWorker: typeof importScripts === 'function',
+  manifestVersion: browser.runtime.getManifest().manifest_version
+};
+
+console.log('🌐 Browser detected:', browserInfo);
+
 // MCP Server connection configuration
 let MCP_SERVER_URL = 'ws://localhost:5555'; // Default, will be auto-discovered
-let mcpSocket = null;
-let reconnectInterval = null;
-let reconnectAttempts = 0;
 let lastKnownPorts = { websocket: 5555, http: 5556 }; // Cache for port discovery
 
 // Safety Mode configuration
@@ -13,9 +25,204 @@ const WRITE_EDIT_TOOLS = [
 ];
 
 // Load safety mode state on startup
-chrome.storage.local.get(['safetyMode'], (result) => {
+browser.storage.local.get(['safetyMode'], (result) => {
   safetyModeEnabled = result.safetyMode || false;
 });
+
+// Cross-browser WebSocket connection manager
+class ConnectionManager {
+  constructor() {
+    this.mcpSocket = null;
+    this.reconnectInterval = null;
+    this.reconnectAttempts = 0;
+    this.heartbeatInterval = null;
+    this.isServiceWorker = browserInfo.isServiceWorker;
+    this.isFirefox = browserInfo.isFirefox;
+  }
+
+  async connect() {
+    if (this.isServiceWorker) {
+      // Chrome MV3: Create fresh connection for each operation
+      console.log('🔧 Chrome MV3: Creating temporary connection');
+      await this.createConnection();
+    } else {
+      // Firefox MV2: Maintain persistent connection
+      if (!this.mcpSocket || this.mcpSocket.readyState !== WebSocket.OPEN) {
+        console.log('🦊 Firefox MV2: Creating persistent connection');
+        await this.createConnection();
+      } else {
+        console.log('🦊 Firefox MV2: Using existing connection');
+      }
+    }
+  }
+
+  async createConnection() {
+    try {
+      // Try port discovery if using default URL or if connection failed
+      if (MCP_SERVER_URL === 'ws://localhost:5555' || this.reconnectAttempts > 2) {
+        await this.discoverServerPorts();
+        this.reconnectAttempts = 0; // Reset attempts after discovery
+      }
+
+      console.log('🔗 Connecting to MCP server at', MCP_SERVER_URL);
+      this.mcpSocket = new WebSocket(MCP_SERVER_URL);
+      
+      this.mcpSocket.onopen = () => {
+        console.log('✅ Connected to MCP server');
+        this.clearReconnectInterval();
+        this.reconnectAttempts = 0; // Reset attempts on successful connection
+        
+        const tools = getAvailableTools();
+        console.log(`🔧 Registering ${tools.length} tools:`, tools.map(t => t.name));
+        
+        // Register available browser functions
+        this.mcpSocket.send(JSON.stringify({
+          type: 'register',
+          tools: tools
+        }));
+        
+        // Setup heartbeat for persistent connections
+        if (!this.isServiceWorker) {
+          this.setupHeartbeat();
+        }
+      };
+      
+      this.mcpSocket.onmessage = async (event) => {
+        const message = JSON.parse(event.data);
+        await handleMCPRequest(message);
+      };
+      
+      this.mcpSocket.onclose = (event) => {
+        console.log(`❌ Disconnected from MCP server (code: ${event.code}, reason: ${event.reason})`);
+        this.clearHeartbeat(); // Clear heartbeat on disconnect
+        this.reconnectAttempts++;
+        
+        // Check if this was a normal closure or abnormal
+        if (event.code !== 1000 && event.code !== 1001) {
+          console.log('🔄 Abnormal WebSocket closure, will attempt reconnection');
+          
+          if (!this.isServiceWorker) {
+            // Firefox: Attempt to reconnect
+            this.scheduleReconnect();
+          }
+          // Chrome: Will reconnect on next message
+        } else {
+          console.log('🔄 Normal WebSocket closure');
+        }
+      };
+      
+      this.mcpSocket.onerror = (error) => {
+        console.log('⚠️ MCP WebSocket error:', error);
+        this.reconnectAttempts++;
+      };
+      
+    } catch (error) {
+      console.error('Connection failed:', error);
+      if (!this.isServiceWorker) {
+        this.scheduleReconnect();
+      }
+    }
+  }
+
+  async discoverServerPorts() {
+    // Try common HTTP ports to find the server
+    const commonPorts = [5556, 5557, 5558, 3001, 6001, 6002, 6003];
+    
+    for (const httpPort of commonPorts) {
+      try {
+        const response = await fetch(`http://localhost:${httpPort}/ports`);
+        if (response.ok) {
+          const portInfo = await response.json();
+          console.log('🔍 Discovered server ports:', portInfo);
+          lastKnownPorts = { websocket: portInfo.websocket, http: portInfo.http };
+          MCP_SERVER_URL = portInfo.websocketUrl;
+          return portInfo;
+        }
+      } catch (error) {
+        // Port not available or not OpenDia server, continue searching
+      }
+    }
+    
+    console.log('⚠️ Port discovery failed, using defaults');
+    return null;
+  }
+
+  setupHeartbeat() {
+    // Only maintain heartbeat in persistent background pages
+    this.clearHeartbeat();
+    this.heartbeatInterval = setInterval(() => {
+      if (this.mcpSocket?.readyState === WebSocket.OPEN) {
+        this.mcpSocket.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
+      } else if (this.mcpSocket?.readyState === WebSocket.CLOSED) {
+        console.log('🔄 WebSocket closed, attempting reconnection...');
+        this.connect();
+      }
+    }, 15000); // More frequent heartbeat for better reliability
+  }
+
+  clearHeartbeat() {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+  }
+
+  scheduleReconnect() {
+    this.clearReconnectInterval();
+    
+    // Exponential backoff for reconnection attempts
+    const backoffTime = Math.min(5000 * Math.pow(2, this.reconnectAttempts), 30000);
+    console.log(`🔄 Scheduling reconnection in ${backoffTime}ms (attempt ${this.reconnectAttempts})`);
+    
+    this.reconnectInterval = setInterval(() => {
+      if (this.reconnectAttempts < 10) {
+        this.connect();
+      } else {
+        console.log('❌ Maximum reconnection attempts reached');
+        this.clearReconnectInterval();
+      }
+    }, backoffTime);
+  }
+
+  clearReconnectInterval() {
+    if (this.reconnectInterval) {
+      clearInterval(this.reconnectInterval);
+      this.reconnectInterval = null;
+    }
+  }
+
+  async ensureConnection() {
+    if (this.isServiceWorker) {
+      // Chrome: Always create fresh connection
+      await this.connect();
+    } else {
+      // Firefox: Use existing or create new
+      if (!this.mcpSocket || this.mcpSocket.readyState !== WebSocket.OPEN) {
+        await this.connect();
+      }
+    }
+    return this.mcpSocket;
+  }
+
+  send(message) {
+    if (this.mcpSocket && this.mcpSocket.readyState === WebSocket.OPEN) {
+      this.mcpSocket.send(JSON.stringify(message));
+    } else {
+      console.error('WebSocket not connected');
+    }
+  }
+
+  getStatus() {
+    return {
+      connected: this.mcpSocket && this.mcpSocket.readyState === WebSocket.OPEN,
+      browserInfo: browserInfo,
+      connectionType: this.isServiceWorker ? 'temporary' : 'persistent'
+    };
+  }
+}
+
+// Create global connection manager
+const connectionManager = new ConnectionManager();
 
 // Content script management for background tabs
 async function ensureContentScriptReady(tabId, retries = 3) {
@@ -27,10 +234,10 @@ async function ensureContentScriptReady(tabId, retries = 3) {
           reject(new Error('Content script ping timeout'));
         }, 2000);
         
-        chrome.tabs.sendMessage(tabId, { action: 'ping' }, (response) => {
+        browser.tabs.sendMessage(tabId, { action: 'ping' }, (response) => {
           clearTimeout(timeout);
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
+          if (browser.runtime.lastError) {
+            reject(new Error(browser.runtime.lastError.message));
           } else {
             resolve(response);
           }
@@ -47,7 +254,7 @@ async function ensureContentScriptReady(tabId, retries = 3) {
       if (attempt === retries) {
         // Last attempt - try to inject content script
         try {
-          const tab = await chrome.tabs.get(tabId);
+          const tab = await browser.tabs.get(tabId);
           
           // Check if tab URL is injectable (not chrome://, chrome-extension://, etc.)
           if (!isInjectableUrl(tab.url)) {
@@ -55,10 +262,33 @@ async function ensureContentScriptReady(tabId, retries = 3) {
           }
           
           console.log(`🔄 Injecting content script into tab ${tabId}`);
-          await chrome.scripting.executeScript({
-            target: { tabId: tabId },
-            files: ['content.js']
-          });
+          
+          // Use appropriate API based on browser
+          if (browser.scripting) {
+            // Chrome MV3
+            await browser.scripting.executeScript({
+              target: { tabId: tabId },
+              files: ['src/content/content.js']
+            });
+          } else {
+            // Firefox MV2 - check if already injected first
+            try {
+              const result = await browser.tabs.executeScript(tabId, {
+                code: 'typeof window.OpenDiaContentScriptLoaded !== "undefined"'
+              });
+              
+              if (result && result[0]) {
+                console.log(`🔄 Content script already present in tab ${tabId}`);
+                return true;
+              }
+            } catch (e) {
+              // Continue with injection if check fails
+            }
+            
+            await browser.tabs.executeScript(tabId, {
+              file: 'src/content/content.js'
+            });
+          }
           
           // Wait a moment for script to initialize
           await new Promise(resolve => setTimeout(resolve, 1000));
@@ -66,10 +296,10 @@ async function ensureContentScriptReady(tabId, retries = 3) {
           // Test again
           const testResponse = await new Promise((resolve, reject) => {
             const timeout = setTimeout(() => reject(new Error('Timeout after injection')), 3000);
-            chrome.tabs.sendMessage(tabId, { action: 'ping' }, (response) => {
+            browser.tabs.sendMessage(tabId, { action: 'ping' }, (response) => {
               clearTimeout(timeout);
-              if (chrome.runtime.lastError) {
-                reject(new Error(chrome.runtime.lastError.message));
+              if (browser.runtime.lastError) {
+                reject(new Error(browser.runtime.lastError.message));
               } else {
                 resolve(response);
               }
@@ -100,15 +330,15 @@ async function ensureContentScriptReady(tabId, retries = 3) {
 function isInjectableUrl(url) {
   if (!url) return false;
   
-  const restrictedProtocols = ['chrome:', 'chrome-extension:', 'chrome-devtools:', 'edge:', 'moz-extension:'];
-  const restrictedDomains = ['chrome.google.com'];
+  const restrictedProtocols = ['chrome:', 'chrome-extension:', 'chrome-devtools:', 'edge:', 'moz-extension:', 'about:'];
+  const restrictedDomains = ['chrome.google.com', 'addons.mozilla.org'];
   
   // Check protocol
   if (restrictedProtocols.some(protocol => url.startsWith(protocol))) {
     return false;
   }
   
-  // Check special Chrome pages
+  // Check special browser pages
   if (url.startsWith('https://chrome.google.com/webstore') || 
       url.includes('chrome://') || 
       restrictedDomains.some(domain => url.includes(domain))) {
@@ -121,7 +351,7 @@ function isInjectableUrl(url) {
 // Get content script readiness status for a tab
 async function getTabContentScriptStatus(tabId) {
   try {
-    const tab = await chrome.tabs.get(tabId);
+    const tab = await browser.tabs.get(tabId);
     
     if (!isInjectableUrl(tab.url)) {
       return { ready: false, reason: 'restricted_url', url: tab.url };
@@ -129,7 +359,7 @@ async function getTabContentScriptStatus(tabId) {
     
     const response = await new Promise((resolve, reject) => {
       const timeout = setTimeout(() => resolve(null), 1000);
-      chrome.tabs.sendMessage(tabId, { action: 'ping' }, (response) => {
+      browser.tabs.sendMessage(tabId, { action: 'ping' }, (response) => {
         clearTimeout(timeout);
         resolve(response);
       });
@@ -144,82 +374,6 @@ async function getTabContentScriptStatus(tabId) {
   } catch (error) {
     return { ready: false, reason: 'tab_error', error: error.message };
   }
-}
-
-// Port discovery function
-async function discoverServerPorts() {
-  // Try common HTTP ports to find the server
-  const commonPorts = [5556, 5557, 5558, 3001, 6001, 6002, 6003];
-  
-  for (const httpPort of commonPorts) {
-    try {
-      const response = await fetch(`http://localhost:${httpPort}/ports`);
-      if (response.ok) {
-        const portInfo = await response.json();
-        console.log('🔍 Discovered server ports:', portInfo);
-        lastKnownPorts = { websocket: portInfo.websocket, http: portInfo.http };
-        MCP_SERVER_URL = portInfo.websocketUrl;
-        return portInfo;
-      }
-    } catch (error) {
-      // Port not available or not OpenDia server, continue searching
-    }
-  }
-  
-  // Fallback to default if discovery fails
-  console.log('⚠️ Port discovery failed, using defaults');
-  return null;
-}
-
-// Initialize WebSocket connection to MCP server
-async function connectToMCPServer() {
-  if (mcpSocket && mcpSocket.readyState === WebSocket.OPEN) return;
-  
-  // Try port discovery if using default URL or if connection failed
-  if (MCP_SERVER_URL === 'ws://localhost:5555' || reconnectAttempts > 2) {
-    await discoverServerPorts();
-    reconnectAttempts = 0; // Reset attempts after discovery
-  }
-  
-  console.log('🔗 Connecting to MCP server at', MCP_SERVER_URL);
-  mcpSocket = new WebSocket(MCP_SERVER_URL);
-  
-  mcpSocket.onopen = () => {
-    console.log('✅ Connected to MCP server');
-    clearInterval(reconnectInterval);
-    
-    const tools = getAvailableTools();
-    console.log(`🔧 Registering ${tools.length} tools:`, tools.map(t => t.name));
-    
-    // Register available browser functions
-    mcpSocket.send(JSON.stringify({
-      type: 'register',
-      tools: tools
-    }));
-  };
-  
-  mcpSocket.onmessage = async (event) => {
-    const message = JSON.parse(event.data);
-    await handleMCPRequest(message);
-  };
-  
-  mcpSocket.onclose = () => {
-    console.log('❌ Disconnected from MCP server, will reconnect...');
-    reconnectAttempts++;
-    
-    // Clear any existing reconnect interval
-    if (reconnectInterval) {
-      clearInterval(reconnectInterval);
-    }
-    
-    // Attempt to reconnect every 5 seconds
-    reconnectInterval = setInterval(connectToMCPServer, 5000);
-  };
-  
-  mcpSocket.onerror = (error) => {
-    console.log('⚠️ MCP WebSocket error:', error);
-    reconnectAttempts++;
-  };
 }
 
 // Define available browser automation tools for MCP
@@ -839,6 +993,9 @@ async function handleMCPRequest(message) {
   const { id, method, params } = message;
 
   try {
+    // Ensure connection for Chrome service workers
+    await connectionManager.ensureConnection();
+
     // Safety Mode check: Block write/edit tools if safety mode is enabled
     if (safetyModeEnabled && WRITE_EDIT_TOOLS.includes(method)) {
       const targetInfo = params.tab_id ? `tab ${params.tab_id}` : 'the current page';
@@ -913,23 +1070,19 @@ async function handleMCPRequest(message) {
     }
 
     // Send success response
-    mcpSocket.send(
-      JSON.stringify({
-        id,
-        result,
-      })
-    );
+    connectionManager.send({
+      id,
+      result,
+    });
   } catch (error) {
     // Send error response
-    mcpSocket.send(
-      JSON.stringify({
-        id,
-        error: {
-          message: error.message,
-          code: -32603,
-        },
-      })
-    );
+    connectionManager.send({
+      id,
+      error: {
+        message: error.message,
+        code: -32603,
+      },
+    });
   }
 }
 
@@ -940,13 +1093,13 @@ async function sendToContentScript(action, data, targetTabId = null) {
   if (targetTabId) {
     // Use specific tab
     try {
-      targetTab = await chrome.tabs.get(targetTabId);
+      targetTab = await browser.tabs.get(targetTabId);
     } catch (error) {
       throw new Error(`Tab ${targetTabId} not found or inaccessible`);
     }
   } else {
     // Fallback to active tab (maintains compatibility)
-    const [activeTab] = await chrome.tabs.query({
+    const [activeTab] = await browser.tabs.query({
       active: true,
       currentWindow: true,
     });
@@ -961,9 +1114,9 @@ async function sendToContentScript(action, data, targetTabId = null) {
   await ensureContentScriptReady(targetTab.id);
   
   return new Promise((resolve, reject) => {
-    chrome.tabs.sendMessage(targetTab.id, { action, data }, (response) => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(`Tab ${targetTab.id}: ${chrome.runtime.lastError.message}`));
+    browser.tabs.sendMessage(targetTab.id, { action, data }, (response) => {
+      if (browser.runtime.lastError) {
+        reject(new Error(`Tab ${targetTab.id}: ${browser.runtime.lastError.message}`));
       } else if (response && response.success) {
         resolve(response.data);
       } else {
@@ -974,12 +1127,12 @@ async function sendToContentScript(action, data, targetTabId = null) {
 }
 
 async function navigateToUrl(url, waitFor, timeout = 10000) {
-  const [activeTab] = await chrome.tabs.query({
+  const [activeTab] = await browser.tabs.query({
     active: true,
     currentWindow: true,
   });
   
-  await chrome.tabs.update(activeTab.id, { url });
+  await browser.tabs.update(activeTab.id, { url });
   
   // If waitFor is specified, wait for the element to appear
   if (waitFor) {
@@ -998,7 +1151,7 @@ async function waitForElement(tabId, selector, timeout = 5000) {
   
   while (Date.now() - startTime < timeout) {
     try {
-      const result = await chrome.tabs.sendMessage(tabId, {
+      const result = await browser.tabs.sendMessage(tabId, {
         action: 'wait_for',
         data: { 
           condition_type: 'element_visible', 
@@ -1115,7 +1268,7 @@ async function createSingleTab(url, active, wait_for, timeout) {
   }
   
   console.log(`🔍 Creating single tab with properties:`, createProperties);
-  const newTab = await chrome.tabs.create(createProperties);
+  const newTab = await browser.tabs.create(createProperties);
   console.log(`📝 Tab created:`, { id: newTab.id, url: newTab.url, pendingUrl: newTab.pendingUrl });
   
   // Wait a moment for the URL to load
@@ -1124,7 +1277,7 @@ async function createSingleTab(url, active, wait_for, timeout) {
     
     // Check if tab loaded correctly
     try {
-      const updatedTab = await chrome.tabs.get(newTab.id);
+      const updatedTab = await browser.tabs.get(newTab.id);
       console.log(`🔄 Tab after load check:`, { id: updatedTab.id, url: updatedTab.url, status: updatedTab.status });
       
       // If URL was provided and wait_for is specified, wait for the element
@@ -1226,14 +1379,14 @@ async function createTabsBatch(urls, active, wait_for, timeout, batch_settings =
         // Only activate the very last tab if active=true
         const shouldActivate = active && isLastTab;
         
-        const tab = await chrome.tabs.create({
+        const tab = await browser.tabs.create({
           url: url,
           active: shouldActivate
         });
         
         // Wait a moment and check actual URL
         await new Promise(resolve => setTimeout(resolve, 300));
-        const updatedTab = await chrome.tabs.get(tab.id);
+        const updatedTab = await browser.tabs.get(tab.id);
         
         createdTabs.push({
           tab_id: tab.id,
@@ -1354,7 +1507,7 @@ async function closeTabs(params) {
     tabsToClose = [tab_id];
   } else {
     // Close current tab
-    const [activeTab] = await chrome.tabs.query({
+    const [activeTab] = await browser.tabs.query({
       active: true,
       currentWindow: true,
     });
@@ -1368,7 +1521,7 @@ async function closeTabs(params) {
   }
   
   // Close tabs
-  await chrome.tabs.remove(tabsToClose);
+  await browser.tabs.remove(tabsToClose);
   
   return {
     success: true,
@@ -1389,7 +1542,7 @@ async function listTabs(params) {
     queryOptions.currentWindow = true;
   }
   
-  const tabs = await chrome.tabs.query(queryOptions);
+  const tabs = await browser.tabs.query(queryOptions);
   
   // Check content script status if requested
   const contentScriptStatuses = new Map();
@@ -1469,17 +1622,17 @@ async function listTabs(params) {
 
 async function switchToTab(tabId) {
   // First, get tab info to ensure it exists
-  const tab = await chrome.tabs.get(tabId);
+  const tab = await browser.tabs.get(tabId);
   
   if (!tab) {
     throw new Error(`Tab with ID ${tabId} not found`);
   }
   
   // Switch to the tab
-  await chrome.tabs.update(tabId, { active: true });
+  await browser.tabs.update(tabId, { active: true });
   
   // Also focus the window containing the tab
-  await chrome.windows.update(tab.windowId, { focused: true });
+  await browser.windows.update(tab.windowId, { focused: true });
   
   return {
     success: true,
@@ -1496,9 +1649,9 @@ async function getBookmarks(params) {
   
   let bookmarks;
   if (query) {
-    bookmarks = await chrome.bookmarks.search(query);
+    bookmarks = await browser.bookmarks.search(query);
   } else {
-    bookmarks = await chrome.bookmarks.getTree();
+    bookmarks = await browser.bookmarks.getTree();
   }
   
   return {
@@ -1511,7 +1664,7 @@ async function getBookmarks(params) {
 async function addBookmark(params) {
   const { title, url, parentId } = params;
   
-  const bookmark = await chrome.bookmarks.create({
+  const bookmark = await browser.bookmarks.create({
     title,
     url,
     parentId
@@ -1537,7 +1690,7 @@ async function getHistory(params) {
   } = params;
 
   try {
-    // Chrome History API search configuration
+    // Browser History API search configuration
     const searchQuery = {
       text: keywords,
       maxResults: Math.min(max_results * 3, 1000), // Over-fetch for filtering
@@ -1552,7 +1705,7 @@ async function getHistory(params) {
     }
 
     // Execute history search
-    const historyItems = await chrome.history.search(searchQuery);
+    const historyItems = await browser.history.search(searchQuery);
     
     // Apply advanced filters
     let filteredItems = historyItems.filter(item => {
@@ -1679,7 +1832,7 @@ async function getSelectedText(params) {
     if (tab_id) {
       // Use specific tab
       try {
-        targetTab = await chrome.tabs.get(tab_id);
+        targetTab = await browser.tabs.get(tab_id);
       } catch (error) {
         return {
           success: false,
@@ -1692,7 +1845,7 @@ async function getSelectedText(params) {
       }
     } else {
       // Get the active tab
-      const [activeTab] = await chrome.tabs.query({
+      const [activeTab] = await browser.tabs.query({
         active: true,
         currentWindow: true,
       });
@@ -1710,69 +1863,22 @@ async function getSelectedText(params) {
       targetTab = activeTab;
     }
 
-    // Execute script to get selected text
-    const results = await chrome.scripting.executeScript({
-      target: { tabId: targetTab.id },
-      func: () => {
-        const selection = window.getSelection();
-        const selectedText = selection.toString();
-        
-        if (!selectedText) {
-          return {
-            text: "",
-            hasSelection: false,
-            metadata: null
-          };
-        }
+    // Execute script to get selected text - handle browser differences
+    let results;
+    if (browser.scripting) {
+      // Chrome MV3
+      results = await browser.scripting.executeScript({
+        target: { tabId: targetTab.id },
+        func: getSelectionFunction
+      });
+    } else {
+      // Firefox MV2
+      results = await browser.tabs.executeScript(targetTab.id, {
+        code: `(${getSelectionFunction.toString()})()`
+      });
+    }
 
-        // Get metadata about the selection
-        const range = selection.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
-        
-        // Get parent element info
-        const commonAncestor = range.commonAncestorContainer;
-        const parentElement = commonAncestor.nodeType === Node.TEXT_NODE
-          ? commonAncestor.parentElement
-          : commonAncestor;
-        
-        const metadata = {
-          length: selectedText.length,
-          word_count: selectedText.trim().split(/\s+/).filter(word => word.length > 0).length,
-          line_count: selectedText.split('\n').length,
-          position: {
-            x: rect.x,
-            y: rect.y,
-            width: rect.width,
-            height: rect.height
-          },
-          parent_element: {
-            tag_name: parentElement.tagName?.toLowerCase(),
-            class_name: parentElement.className,
-            id: parentElement.id,
-            text_content_length: parentElement.textContent?.length || 0
-          },
-          page_info: {
-            url: window.location.href,
-            title: document.title,
-            domain: window.location.hostname
-          },
-          selection_info: {
-            anchor_offset: selection.anchorOffset,
-            focus_offset: selection.focusOffset,
-            range_count: selection.rangeCount,
-            is_collapsed: selection.isCollapsed
-          }
-        };
-
-        return {
-          text: selectedText,
-          hasSelection: true,
-          metadata: metadata
-        };
-      }
-    });
-
-    const result = results[0]?.result;
+    const result = results[0]?.result || results[0];
     
     if (!result) {
       return {
@@ -1847,24 +1953,74 @@ async function getSelectedText(params) {
   }
 }
 
+// Function to execute in page context
+function getSelectionFunction() {
+  const selection = window.getSelection();
+  const selectedText = selection.toString();
+  
+  if (!selectedText) {
+    return {
+      text: "",
+      hasSelection: false,
+      metadata: null
+    };
+  }
+
+  // Get metadata about the selection
+  const range = selection.getRangeAt(0);
+  const rect = range.getBoundingClientRect();
+  
+  // Get parent element info
+  const commonAncestor = range.commonAncestorContainer;
+  const parentElement = commonAncestor.nodeType === Node.TEXT_NODE
+    ? commonAncestor.parentElement
+    : commonAncestor;
+  
+  const metadata = {
+    length: selectedText.length,
+    word_count: selectedText.trim().split(/\s+/).filter(word => word.length > 0).length,
+    line_count: selectedText.split('\n').length,
+    position: {
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height
+    },
+    parent_element: {
+      tag_name: parentElement.tagName?.toLowerCase(),
+      class_name: parentElement.className,
+      id: parentElement.id,
+      text_content_length: parentElement.textContent?.length || 0
+    },
+    page_info: {
+      url: window.location.href,
+      title: document.title,
+      domain: window.location.hostname
+    },
+    selection_info: {
+      anchor_offset: selection.anchorOffset,
+      focus_offset: selection.focusOffset,
+      range_count: selection.rangeCount,
+      is_collapsed: selection.isCollapsed
+    }
+  };
+
+  return {
+    text: selectedText,
+    hasSelection: true,
+    metadata: metadata
+  };
+}
+
 // Initialize connection when extension loads (with delay for server startup)
 setTimeout(() => {
-  connectToMCPServer();
+  connectionManager.connect();
 }, 1000);
 
-// Heartbeat to keep connection alive
-setInterval(() => {
-  if (mcpSocket && mcpSocket.readyState === WebSocket.OPEN) {
-    mcpSocket.send(JSON.stringify({ type: "ping", timestamp: Date.now() }));
-  }
-}, 30000); // Every 30 seconds
-
 // Handle messages from popup
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "getStatus") {
-    sendResponse({
-      connected: mcpSocket && mcpSocket.readyState === WebSocket.OPEN,
-    });
+    sendResponse(connectionManager.getStatus());
   } else if (request.action === "getToolCount") {
     const tools = getAvailableTools();
     sendResponse({
@@ -1872,7 +2028,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       tools: tools.map(t => t.name)
     });
   } else if (request.action === "reconnect") {
-    connectToMCPServer();
+    connectionManager.connect();
     sendResponse({ success: true });
   } else if (request.action === "getPorts") {
     sendResponse({
@@ -1884,9 +2040,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.log(`🛡️ Safety Mode ${safetyModeEnabled ? 'ENABLED' : 'DISABLED'}`);
     sendResponse({ success: true });
   } else if (request.action === "test") {
-    if (mcpSocket && mcpSocket.readyState === WebSocket.OPEN) {
-      mcpSocket.send(JSON.stringify({ type: "test", timestamp: Date.now() }));
-    }
+    connectionManager.send({ type: "test", timestamp: Date.now() });
     sendResponse({ success: true });
   }
   return true; // Keep the message channel open

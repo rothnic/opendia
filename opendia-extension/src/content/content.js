@@ -1,4 +1,15 @@
 // Enhanced Browser Automation Content Script with Anti-Detection
+// Import WebExtension polyfill for cross-browser compatibility
+if (typeof browser === 'undefined' && typeof chrome !== 'undefined') {
+  globalThis.browser = chrome;
+}
+
+// Prevent multiple injections - especially important for Firefox
+if (typeof window.OpenDiaContentScriptLoaded !== 'undefined') {
+  console.log("OpenDia content script already loaded, skipping re-injection");
+} else {
+  window.OpenDiaContentScriptLoaded = true;
+
 console.log("OpenDia enhanced content script loaded");
 
 // Enhanced Pattern Database with Twitter-First Priority
@@ -228,7 +239,7 @@ class BrowserAutomation {
   }
 
   setupMessageListener() {
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       this.handleMessage(message)
         .then(sendResponse)
         .catch((error) => {
@@ -2882,3 +2893,5 @@ const THEME_PRESETS = {
 
 // Initialize the automation system
 const browserAutomation = new BrowserAutomation();
+
+} // End of injection guard

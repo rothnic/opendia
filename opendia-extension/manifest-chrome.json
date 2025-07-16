@@ -4,10 +4,10 @@
   "version": "1.0.6",
   "description": "Connect your browser to AI models",
   "icons": {
-    "16": "icon-16.png",
-    "32": "icon-32.png",
-    "48": "icon-48.png",
-    "128": "icon-128.png"
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
   },
   "permissions": [
     "tabs",
@@ -23,21 +23,24 @@
     "<all_urls>"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "src/background/background.js",
+    "type": "module"
   },
   "action": {
-    "default_popup": "popup.html",
+    "default_popup": "src/popup/popup.html",
     "default_title": "OpenDia"
   },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "js": ["src/polyfill/browser-polyfill.min.js", "src/content/content.js"],
       "run_at": "document_idle"
     }
   ],
-  "externally_connectable": {
-    "ids": ["*"],
-    "matches": ["http://localhost/*"]
-  }
+  "web_accessible_resources": [
+    {
+      "resources": ["src/polyfill/browser-polyfill.min.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }

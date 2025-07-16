@@ -1,4 +1,13 @@
 // OpenDia Popup
+// Import WebExtension polyfill for cross-browser compatibility
+if (typeof browser === 'undefined' && typeof chrome !== 'undefined') {
+  globalThis.browser = chrome;
+}
+
+// Cross-browser compatibility layer
+const runtimeAPI = browser.runtime;
+const tabsAPI = browser.tabs;
+const storageAPI = browser.storage;
 let statusIndicator = document.getElementById("statusIndicator");
 let statusText = document.getElementById("statusText");
 let toolCount = document.getElementById("toolCount");
@@ -14,9 +23,9 @@ function updateToolCount() {
     "get_bookmarks", "add_bookmark", "get_history", "get_selected_text", "get_page_links"
   ];
   
-  if (chrome.runtime?.id) {
-    chrome.runtime.sendMessage({ action: "getToolCount" }, (response) => {
-      if (!chrome.runtime.lastError && response?.toolCount) {
+  if (runtimeAPI?.id) {
+    runtimeAPI.sendMessage({ action: "getToolCount" }, (response) => {
+      if (!runtimeAPI.lastError && response?.toolCount) {
         toolCount.innerHTML = `<span class="tooltip">${response.toolCount}
           <span class="tooltip-content">Available MCP Tools:\npage_analyze • page_extract_content • element_click • element_fill • element_get_state • page_navigate • page_wait_for • page_scroll • tab_create • tab_close • tab_list • tab_switch • get_bookmarks • add_bookmark • get_history • get_selected_text • get_page_links</span>
         </span>`;
@@ -32,9 +41,9 @@ function updateToolCount() {
 
 // Check connection status and get page info
 function checkStatus() {
-  if (chrome.runtime?.id) {
-    chrome.runtime.sendMessage({ action: "getStatus" }, (response) => {
-      if (chrome.runtime.lastError) {
+  if (runtimeAPI?.id) {
+    runtimeAPI.sendMessage({ action: "getStatus" }, (response) => {
+      if (runtimeAPI.lastError) {
         updateStatus(false);
       } else {
         updateStatus(response?.connected || false);
@@ -45,7 +54,7 @@ function checkStatus() {
     updateToolCount();
     
     // Get current page info
-    chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+    tabsAPI.query({active: true, currentWindow: true}, (tabs) => {
       if (tabs[0]) {
         const url = new URL(tabs[0].url);
         currentPage.textContent = url.hostname;
@@ -62,9 +71,9 @@ setInterval(checkStatus, 2000);
 
 // Update server URL display
 function updateServerUrl() {
-  if (chrome.runtime?.id) {
-    chrome.runtime.sendMessage({ action: "getPorts" }, (response) => {
-      if (!chrome.runtime.lastError && response?.websocketUrl) {
+  if (runtimeAPI?.id) {
+    runtimeAPI.sendMessage({ action: "getPorts" }, (response) => {
+      if (!runtimeAPI.lastError && response?.websocketUrl) {
         serverUrl.textContent = response.websocketUrl;
       }
     });
@@ -90,9 +99,9 @@ function updateStatus(connected) {
 
 // Reconnect button
 document.getElementById("reconnectBtn").addEventListener("click", () => {
-  if (chrome.runtime?.id) {
-    chrome.runtime.sendMessage({ action: "reconnect" }, (response) => {
-      if (!chrome.runtime.lastError) {
+  if (runtimeAPI?.id) {
+    runtimeAPI.sendMessage({ action: "reconnect" }, (response) => {
+      if (!runtimeAPI.lastError) {
         setTimeout(checkStatus, 1000);
       }
     });
@@ -104,7 +113,7 @@ document.getElementById("reconnectBtn").addEventListener("click", () => {
 const safetyModeToggle = document.getElementById("safetyMode");
 
 // Load safety mode state from storage
-chrome.storage.local.get(['safetyMode'], (result) => {
+storageAPI.local.get(['safetyMode'], (result) => {
   const safetyEnabled = result.safetyMode || false; // Default to false (safety off)
   safetyModeToggle.checked = safetyEnabled;
 });
@@ -114,17 +123,17 @@ safetyModeToggle.addEventListener('change', () => {
   const safetyEnabled = safetyModeToggle.checked;
   
   // Save to storage
-  chrome.storage.local.set({ safetyMode: safetyEnabled });
+  storageAPI.local.set({ safetyMode: safetyEnabled });
   
   // Notify background script
-  chrome.runtime.sendMessage({ 
+  runtimeAPI.sendMessage({ 
     action: "setSafetyMode", 
     enabled: safetyEnabled 
   });
 });
 
 // Listen for updates from background script
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+runtimeAPI.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "statusUpdate") {
     updateStatus(message.connected);
   }

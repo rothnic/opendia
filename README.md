@@ -3,7 +3,7 @@
 **The open alternative to Dia / Perplexity Comet**  
 Connect your browser to AI models. 
 No browser switching needed—works seamlessly with Chrome, Firefox, and any Chromium browser. Private, local-first & MCP focused.
-If you are not technical / never used MCPs before, we recommend using **[Perplexity Comet](https://perplexity.ai/pro?referral_code=SOZRX0OI)**.
+If you are not technical / never used MCPs before, we recommend using **[Perplexity Comet](https://pplx.ai/leosimon)**.
 
 [![npm version](https://img.shields.io/npm/v/opendia)](https://www.npmjs.com/package/opendia)
 [![GitHub release](https://img.shields.io/github/release/aaronjmars/opendia.svg)](https://github.com/aaronjmars/opendia/releases/latest)

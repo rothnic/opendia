@@ -985,6 +985,40 @@ function getAvailableTools() {
         required: ["mode"]
       }
     },
+    {
+      name: "page_execute_script",
+      description: "🔧 EXECUTE JAVASCRIPT: Run custom JavaScript code in a browser tab context to inspect the page, extract content, or retrieve specific data. Returns the result of the script execution. Perfect for dynamic content extraction, HTML inspection, and page state analysis.",
+      inputSchema: {
+        type: "object",
+        examples: [
+          { script: "document.title", description: "Get page title" },
+          { script: "document.body.innerText.substring(0, 500)", description: "Get first 500 chars of body text" },
+          { script: "Array.from(document.querySelectorAll('h1')).map(h => h.textContent)", description: "Get all h1 headings" },
+          { script: "({ url: window.location.href, title: document.title, html: document.documentElement.outerHTML })", description: "Get page info with HTML source" }
+        ],
+        properties: {
+          script: {
+            type: "string",
+            description: "JavaScript code to execute in the page context. Should return a value (use return statement or expression). Can access DOM, window, document, and all page variables. Complex objects will be JSON-serialized."
+          },
+          tab_id: {
+            type: "number",
+            description: "🎯 TARGET ANY TAB: Execute script in specific background tab without switching! Use tab_list to get tab IDs. If omitted, executes in current active tab."
+          },
+          timeout: {
+            type: "number",
+            default: 5000,
+            description: "Maximum execution time in milliseconds"
+          },
+          include_context: {
+            type: "boolean",
+            default: true,
+            description: "Include browser context (URL, title, tab info) in the response"
+          }
+        },
+        required: ["script"]
+      }
+    },
   ];
 }
 
@@ -1064,6 +1098,9 @@ async function handleMCPRequest(message) {
         break;
       case "page_style":
         result = await sendToContentScript('page_style', params, params.tab_id);
+        break;
+      case "page_execute_script":
+        result = await executeScriptInTab(params);
         break;
       default:
         throw new Error(`Unknown method: ${method}`);
@@ -2010,6 +2047,99 @@ function getSelectionFunction() {
     hasSelection: true,
     metadata: metadata
   };
+}
+
+// Execute custom JavaScript in tab context
+async function executeScriptInTab(params) {
+  const {
+    script,
+    tab_id,
+    timeout = 5000,
+    include_context = true
+  } = params;
+
+  try {
+    let targetTab;
+    
+    if (tab_id) {
+      // Use specific tab
+      try {
+        targetTab = await browser.tabs.get(tab_id);
+      } catch (error) {
+        throw new Error(`Tab ${tab_id} not found or inaccessible`);
+      }
+    } else {
+      // Get the active tab
+      const [activeTab] = await browser.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+      
+      if (!activeTab) {
+        throw new Error("No active tab found");
+      }
+      targetTab = activeTab;
+    }
+
+    // Validate script is not empty
+    if (!script || script.trim().length === 0) {
+      throw new Error("Script cannot be empty");
+    }
+
+    // Execute the script with timeout protection
+    const executePromise = (async () => {
+      let results;
+      
+      if (browser.scripting) {
+        // Chrome MV3 - execute script as function
+        results = await browser.scripting.executeScript({
+          target: { tabId: targetTab.id },
+          func: new Function(`return (${script})`)
+        });
+      } else {
+        // Firefox MV2 - execute as code string
+        results = await browser.tabs.executeScript(targetTab.id, {
+          code: `(function() { return (${script}); })()`
+        });
+      }
+
+      return results;
+    })();
+
+    // Add timeout protection
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error(`Script execution timeout after ${timeout}ms`)), timeout)
+    );
+
+    const results = await Promise.race([executePromise, timeoutPromise]);
+    
+    // Extract the result
+    const scriptResult = results[0]?.result !== undefined ? results[0].result : results[0];
+    
+    // Build response
+    const response = {
+      success: true,
+      result: scriptResult,
+      execution_time: Date.now()
+    };
+
+    // Include browser context if requested
+    if (include_context) {
+      response.context = {
+        tab_id: targetTab.id,
+        url: targetTab.url,
+        title: targetTab.title,
+        tab_status: targetTab.status,
+        active: targetTab.active
+      };
+    }
+
+    return response;
+
+  } catch (error) {
+    // Return error with context
+    throw new Error(`Script execution failed: ${error.message}`);
+  }
 }
 
 // Initialize connection when extension loads (with delay for server startup)

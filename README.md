@@ -181,11 +181,12 @@ ngrok config add-authtoken YOUR_TOKEN_HERE
 
 ## 🛠️ Capabilities
 
-OpenDia gives AI models **18 powerful browser tools**:
+OpenDia gives AI models **19 powerful browser tools**:
 
 ### 🎯 Smart Page Understanding
 - **Analyze any webpage** - AI automatically finds buttons, forms, and interactive elements
 - **Extract content intelligently** - Get clean text from articles, social posts, or search results
+- **Execute JavaScript** - Run custom scripts to inspect page HTML, extract dynamic content, or analyze page state
 - **Understand context** - AI knows what type of page it's looking at and how to interact with it
 
 ### 🖱️ Natural Interactions  
@@ -237,6 +238,13 @@ Once everything is set up, try asking your AI:
 
 **Personal Assistant:**
 > *"Find that GitHub repo I was looking at yesterday about React components and bookmark it for later"*
+
+**Page Inspection & Custom Extraction:**
+> *"Execute JavaScript to get the complete HTML source of this page and extract all metadata tags"*
+
+> *"Run a script to find all images on this page and list their sources and alt text"*
+
+> *"Extract the page title, all heading texts, and the first paragraph using JavaScript"*
 
 **Page Styling & Fun:**
 > *"Apply a dark hacker theme to this page to make it look more interesting"*

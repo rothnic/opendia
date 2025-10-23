@@ -44,7 +44,7 @@ Features:
 - Added "Execute JavaScript" capability to Smart Page Understanding section
 - Added example prompts for page inspection and custom extraction
 
-#### Created docs/page_execute_script.md
+#### Created docs/tools/page-execute-script.md
 Comprehensive documentation including:
 - Overview and purpose
 - Feature list
@@ -215,7 +215,7 @@ Potential improvements for future iterations:
 
 1. `opendia-extension/src/background/background.js` - Added tool and implementation
 2. `README.md` - Updated capabilities and examples
-3. `docs/page_execute_script.md` - Comprehensive documentation
+3. `docs/tools/page-execute-script.md` - Comprehensive documentation
 4. Built extension files in `dist/chrome` and `dist/firefox`
 
 ## Conclusion

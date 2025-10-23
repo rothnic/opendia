@@ -1,18 +1,19 @@
 {
   "editor.formatOnSave": false,
   "editor.formatOnPaste": false,
-  "editor.insertSpaces": false,
+  "editor.insertSpaces": true,
   "editor.tabSize": 2,
   "editor.detectIndentation": false,
   "files.eol": "\n",
   "files.insertFinalNewline": true,
   "files.trimTrailingWhitespace": true,
   "[javascript]": {
-    "editor.defaultFormatter": null
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "[json]": {
     "editor.insertSpaces": true,
-    "editor.tabSize": 2
+    "editor.tabSize": 2,
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "[markdown]": {
     "files.trimTrailingWhitespace": false

@@ -7,13 +7,16 @@
     "test": "vitest run",
     "test:watch": "vitest watch",
     "test:ui": "vitest --ui",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "format": "prettier --write \"**/*.{js,json,md}\"",
+    "format:check": "prettier --check \"**/*.{js,json,md}\""
   },
   "dependencies": {
     "ws": "^8.18.3"
   },
   "devDependencies": {
     "@vitest/ui": "^4.0.2",
+    "prettier": "^3.6.2",
     "vitest": "^4.0.2"
   }
 }

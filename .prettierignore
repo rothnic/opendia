@@ -1,0 +1,27 @@
+# Dependencies
+node_modules
+**/node_modules
+
+# Build outputs
+dist
+build
+*.min.js
+
+# Releases
+releases
+*.zip
+
+# Docs (already formatted)
+docs/**/*.md
+
+# Lock files
+package-lock.json
+**/package-lock.json
+
+# Config files
+.vscode
+.editorconfig
+
+# Test outputs
+coverage
+.nyc_output

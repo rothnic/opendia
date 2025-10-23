@@ -19,12 +19,14 @@ All other markdown files must be organized as follows:
   - `docs/api_reference.md` - API documentation
 
 #### Session and Implementation Notes
-- Location: `docs/issues/`
+- Location: `docs/issues/<issue-number>/`
 - Purpose: Session-related notes, implementation summaries, and PR-specific documentation
+- Structure: Each issue gets its own folder named after the issue number
 - Examples:
-  - `docs/issues/implementation_summary.md` - Notes about what was done and why
-  - `docs/issues/issue_123_notes.md` - Notes for a specific issue
-  - `docs/issues/design_decisions.md` - Design decisions made during implementation
+  - `docs/issues/issue-1/plan.md` - Implementation plan for issue #1
+  - `docs/issues/issue-1/notes.md` - Session notes for issue #1
+  - `docs/issues/issue-1/implementation_summary.md` - Summary of what was done and why
+  - `docs/issues/issue-123/design_decisions.md` - Design decisions for issue #123
 
 ### Rules for New Markdown Files
 
@@ -36,8 +38,9 @@ All other markdown files must be organized as follows:
    - Focus on user-facing documentation
 
 3. **For implementation notes and summaries:**
-   - Create files in `docs/issues/` directory
-   - Use descriptive names: `implementation_summary.md`, `issue_123_notes.md`
+   - Create files in `docs/issues/<issue-number>/` directory
+   - Each issue should have its own folder: `docs/issues/issue-1/`, `docs/issues/issue-123/`
+   - Use descriptive names: `plan.md`, `notes.md`, `implementation_summary.md`
    - Include session-related details, reasoning, and decisions
 
 4. **PR summaries and descriptions:**
@@ -56,27 +59,30 @@ All other markdown files must be organized as follows:
 
 ✅ **Correct:**
 ```
-README.md                                 # Root level - special case
-docs/page_execute_script.md             # Tool documentation
-docs/issues/implementation_summary.md    # Session notes
-docs/issues/issue_1_notes.md            # Issue-specific notes
+README.md                                      # Root level - special case
+docs/page_execute_script.md                  # Tool documentation
+docs/issues/issue-1/implementation_summary.md # Session notes for issue #1
+docs/issues/issue-1/plan.md                  # Implementation plan for issue #1
+docs/issues/issue-123/notes.md               # Session notes for issue #123
 ```
 
 ❌ **Incorrect:**
 ```
 PR_SUMMARY.md                            # Should be in PR description
-IMPLEMENTATION_SUMMARY.md                # Should be in docs/issues/
+IMPLEMENTATION_SUMMARY.md                # Should be in docs/issues/issue-X/
 docs/TOOL_GUIDE.md                       # Should be lowercase
-summary.md                               # Should be in docs/issues/
+docs/issues/summary.md                   # Should be in docs/issues/issue-X/
+docs/issues/issue_123_notes.md           # Should be in docs/issues/issue-123/notes.md
 ```
 
 ### Migration Guide
 
 If you find markdown files in incorrect locations:
 1. Remove any `*_SUMMARY.md` or similar files from the project root
-2. Move implementation/session notes to `docs/issues/`
+2. Move implementation/session notes to `docs/issues/issue-X/` where X is the issue number
 3. Keep tool/feature docs in `docs/`
 4. Ensure only `README.md` and `AGENTS.md` remain in root
+5. Organize issue-specific files into their own folders under `docs/issues/`
 
 ## Rationale
 

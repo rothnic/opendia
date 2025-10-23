@@ -25,6 +25,7 @@
     "history",
     "webRequest",
     "webRequestBlocking",
+    "alarms",
     "<all_urls>"
   ],
   "background": {

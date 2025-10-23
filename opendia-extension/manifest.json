@@ -17,7 +17,8 @@
     "webNavigation",
     "notifications",
     "bookmarks",
-    "history"
+    "history",
+    "alarms"
   ],
   "host_permissions": [
     "<all_urls>"

@@ -2366,10 +2366,17 @@ async function executeScriptInTab(params) {
 			let results;
 
 			if (browser.scripting) {
-				// Chrome MV3 - execute script as function
+				// Chrome MV3 - inject function that evaluates script in page context
+				// The page's CSP allows eval, not the extension's CSP
 				results = await browser.scripting.executeScript({
 					target: { tabId: targetTab.id },
-					func: new Function(`return (${script})`),
+					func: (scriptCode) => {
+						// This runs in the page context, where eval is allowed
+						// eslint-disable-next-line no-eval
+						return eval(scriptCode);
+					},
+					args: [script],
+					world: 'MAIN', // Execute in page's main world, not isolated world
 				});
 			} else {
 				// Firefox MV2 - execute as code string

@@ -1,0 +1,19 @@
+{
+  "name": "opendia",
+  "version": "1.0.0",
+  "description": "OpenDia - Browser automation via MCP",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest watch",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@vitest/ui": "^4.0.2",
+    "vitest": "^4.0.2"
+  }
+}

@@ -283,12 +283,57 @@ class TestRunner {
       // Await the tool result
       console.log('Waiting for your selection...');
       const result = await toolCallPromise;
-      console.log('\n🎉 SELECTION RECEIVED!');
-      console.log('select_element response result:', JSON.stringify(result, null, 2));
+
+      // Parse and display the result cleanly
+      console.log('\n' + '='.repeat(70));
+      console.log('🎉 SELECTION RECEIVED!');
+      console.log('='.repeat(70));
+
+      const content = result.content[0].text;
+      const data = JSON.parse(content);
+
+      console.log('\n📊 ELEMENT DATA (What the agent receives):');
+      console.log('─'.repeat(70));
+      console.log(`Tag:        ${data.tagName}`);
+      console.log(`ID:         ${data.id || '(none)'}`);
+      console.log(`Classes:    ${data.classes.length > 0 ? data.classes.join(', ') : '(none)'}`);
+      console.log(`CSS Path:   ${data.path}`);
+      console.log(`Text:       ${data.textContent.substring(0, 100)}${data.textContent.length > 100 ? '...' : ''}`);
+
+      console.log('\n🏷️  ATTRIBUTES:');
+      console.log('─'.repeat(70));
+      Object.entries(data.attributes).forEach(([key, value]) => {
+        const displayValue = value.length > 60 ? value.substring(0, 60) + '...' : value;
+        console.log(`  ${key.padEnd(20)} = ${displayValue}`);
+      });
+
+      if (data.parent) {
+        console.log('\n👨‍👦 PARENT ELEMENT:');
+        console.log('─'.repeat(70));
+        console.log(`  Tag:      ${data.parent.tagName}`);
+        console.log(`  ID:       ${data.parent.id || '(none)'}`);
+        console.log(`  Classes:  ${data.parent.classes.length > 0 ? data.parent.classes.join(', ') : '(none)'}`);
+      }
+
+      console.log('\n📝 HTML SNIPPET:');
+      console.log('─'.repeat(70));
+      const htmlLines = data.html.split('\n').slice(0, 5);
+      htmlLines.forEach(line => console.log(`  ${line}`));
+      if (data.html.split('\n').length > 5) {
+        console.log('  ...');
+      }
+
+      console.log('\n' + '='.repeat(70));
+      console.log('💡 The agent can use this data to:');
+      console.log('   • Understand what element was selected');
+      console.log('   • Build a selector to target it (via ID, class, or CSS path)');
+      console.log('   • See the element\'s context (parent, attributes)');
+      console.log('   • Read the element\'s content');
+      console.log('='.repeat(70));
 
       // Keep browser open for a few seconds so user can see result in console if they want
-      console.log('\nClosing in 5 seconds...');
-      await new Promise(r => setTimeout(r, 5000));
+      console.log('\nClosing in 10 seconds...');
+      await new Promise(r => setTimeout(r, 10000));
 
     } catch (error) {
       console.error('\n❌ TEST FAILED:', error.message);

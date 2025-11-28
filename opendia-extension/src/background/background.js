@@ -437,17 +437,17 @@ function getAvailableTools() {
   return [
     /*
     🎯 BACKGROUND TAB WORKFLOW GUIDE:
-    
+
     1. DISCOVER TABS: Use tab_list with check_content_script=false to see all tabs and their IDs
     2. TARGET SPECIFIC TABS: Add tab_id parameter to any tool to work on background tabs
     3. MULTI-TAB OPERATIONS: Process multiple tabs without switching between them
-    
+
     Example Multi-Tab Workflow:
     - tab_list({check_content_script: false}) → Get tab IDs quickly
     - page_analyze({intent_hint: "article", tab_id: 12345}) → Analyze background research tab
     - page_extract_content({content_type: "article", tab_id: 12345}) → Extract content without switching
     - get_selected_text({tab_id: 67890}) → Get quotes from another background tab
-    
+
     Perfect for: Research workflows, content analysis, form processing, social media management
     */
 
@@ -1137,6 +1137,62 @@ function getAvailableTools() {
         },
         required: ['script']
       }
+    },
+    {
+      name: 'test_csp_bypass',
+      description:
+        '🧪 TEST CSP BYPASS: Run tests to evaluate different approaches for executing scripts on pages with strict Content Security Policy (like LinkedIn). Returns comparison of all approaches showing which work and which are blocked.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          tab_id: {
+            type: 'number',
+            description: 'Tab ID to test against (should be a page with strict CSP like LinkedIn job page)'
+          },
+          test_script: {
+            type: 'string',
+            default: 'document.title',
+            description: 'Simple test script to try executing'
+          },
+          approaches: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Specific approaches to test. If omitted, tests all approaches.'
+          }
+        }
+      }
+    },
+    {
+      name: 'file_upload',
+      description:
+        '📁 Upload a file to a file input element. Fetches file from URL (bypasses CORS) and injects into file input using DataTransfer API. Perfect for form automation.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          file_url: {
+            type: 'string',
+            description: 'URL to fetch the file from (can be localhost, bypasses CORS)'
+          },
+          file_name: {
+            type: 'string',
+            description: 'Name for the file (e.g., "resume.pdf")'
+          },
+          file_selector: {
+            type: 'string',
+            description: 'CSS selector for the file input element (default: input[type="file"])',
+            default: 'input[type="file"]'
+          },
+          mime_type: {
+            type: 'string',
+            description: 'MIME type (auto-detected from URL if not provided)'
+          },
+          tab_id: {
+            type: 'number',
+            description: 'Target tab ID (defaults to active tab)'
+          }
+        },
+        required: ['file_url', 'file_name']
+      }
     }
   ];
 }
@@ -1222,6 +1278,12 @@ async function handleMCPRequest(message) {
         break;
       case 'page_execute_script':
         result = await executeScriptInTab(params);
+        break;
+      case 'test_csp_bypass':
+        result = await testCspBypassApproaches(params);
+        break;
+      case 'file_upload':
+        result = await uploadFileToInput(params);
         break;
       default:
         throw new Error(`Unknown method: ${method}`);
@@ -2280,8 +2342,26 @@ async function executeScriptInTab(params) {
 
     const results = await Promise.race([executePromise, timeoutPromise]);
 
-    // Extract the result
-    const scriptResult = results[0]?.result !== undefined ? results[0].result : results[0];
+    // Debug logging
+    console.log('🔍 Script execution results:', {
+      resultsLength: results?.length,
+      firstResult: results?.[0],
+      hasResultProperty: results?.[0]?.hasOwnProperty('result'),
+      resultValue: results?.[0]?.result
+    });
+
+    // Extract the result - Chrome MV3 returns array of InjectionResult objects
+    // Firefox MV2 returns array with direct values
+    let scriptResult;
+    if (results && results.length > 0) {
+      // Chrome MV3: results[0] is InjectionResult with 'result' property
+      // Firefox MV2: results[0] is the actual value
+      scriptResult = results[0]?.result !== undefined ? results[0].result : results[0];
+    } else {
+      scriptResult = null;
+    }
+
+    console.log('✅ Extracted script result:', scriptResult);
 
     // Build response
     const response = {
@@ -2305,6 +2385,520 @@ async function executeScriptInTab(params) {
   } catch (error) {
     // Return error with context
     throw new Error(`Script execution failed: ${error.message}`);
+  }
+}
+
+/**
+ * Fetch a file from URL and upload it to a file input element
+ * Background scripts have no CORS restrictions, so we can fetch from any URL
+ */
+async function uploadFileToInput(params) {
+  const { 
+    file_url, 
+    file_name, 
+    file_selector = 'input[type="file"]',
+    mime_type,
+    tab_id 
+  } = params;
+
+  // Step 1: Fetch the file in background script (no CORS restrictions)
+  console.log(`📁 Fetching file from: ${file_url}`);
+  
+  let response;
+  try {
+    response = await fetch(file_url);
+    if (!response.ok) {
+      throw new Error(`Fetch failed: ${response.status} ${response.statusText}`);
+    }
+  } catch (error) {
+    throw new Error(`Failed to fetch file: ${error.message}`);
+  }
+
+  // Get file bytes and content type
+  const arrayBuffer = await response.arrayBuffer();
+  const contentType = mime_type || response.headers.get('Content-Type') || 'application/octet-stream';
+  const fileBytes = Array.from(new Uint8Array(arrayBuffer));
+  
+  console.log(`📁 Fetched ${fileBytes.length} bytes, type: ${contentType}`);
+
+  // Step 2: Get target tab
+  let targetTab;
+  if (tab_id) {
+    try {
+      targetTab = await browser.tabs.get(tab_id);
+    } catch (error) {
+      throw new Error(`Tab ${tab_id} not found`);
+    }
+  } else {
+    const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
+    if (!activeTab) throw new Error('No active tab found');
+    targetTab = activeTab;
+  }
+
+  // Step 3: Inject the file into the page's file input
+  const results = await browser.scripting.executeScript({
+    target: { tabId: targetTab.id },
+    func: (bytes, fileName, mimeType, selector) => {
+      // Reconstruct the file from bytes
+      const uint8Array = new Uint8Array(bytes);
+      const blob = new Blob([uint8Array], { type: mimeType });
+      const file = new File([blob], fileName, { type: mimeType });
+
+      // Find the file input
+      const input = document.querySelector(selector);
+      if (!input) {
+        return { success: false, error: `No element found for selector: ${selector}` };
+      }
+
+      // Use DataTransfer to set the file
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(file);
+      input.files = dataTransfer.files;
+
+      // Dispatch change event (try both jQuery and native)
+      if (window.jQuery) {
+        window.jQuery(input).trigger('change');
+      } else {
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+
+      return { 
+        success: true, 
+        fileName: file.name,
+        fileSize: file.size,
+        mimeType: file.type,
+        inputSelector: selector
+      };
+    },
+    args: [fileBytes, file_name, contentType, file_selector],
+    world: 'MAIN'
+  });
+
+  const injectionResult = results[0]?.result;
+  
+  if (!injectionResult?.success) {
+    throw new Error(injectionResult?.error || 'File injection failed');
+  }
+
+  return {
+    success: true,
+    message: `File "${file_name}" uploaded successfully`,
+    details: {
+      file_name: injectionResult.fileName,
+      file_size: injectionResult.fileSize,
+      mime_type: injectionResult.mimeType,
+      selector_used: injectionResult.inputSelector,
+      tab_id: targetTab.id,
+      tab_url: targetTab.url
+    }
+  };
+}
+
+/**
+ * Test CSP bypass approaches
+ * Tests different methods for executing scripts on pages with strict CSP
+ */
+async function testCspBypassApproaches(params) {
+  const { tab_id, test_script = 'document.title' } = params;
+  
+  let targetTab;
+  if (tab_id) {
+    try {
+      targetTab = await browser.tabs.get(tab_id);
+    } catch (error) {
+      throw new Error(`Tab ${tab_id} not found or inaccessible`);
+    }
+  } else {
+    const [activeTab] = await browser.tabs.query({
+      active: true,
+      currentWindow: true
+    });
+    if (!activeTab) {
+      throw new Error('No active tab found');
+    }
+    targetTab = activeTab;
+  }
+  
+  const results = {
+    tab_id: targetTab.id,
+    url: targetTab.url,
+    title: targetTab.title,
+    test_script: test_script,
+    timestamp: new Date().toISOString(),
+    approaches: {}
+  };
+  
+  // Approach 1: MAIN world + eval (current implementation)
+  results.approaches.approach1_mainWorldEval = await testApproach1(targetTab.id, test_script);
+  
+  // Approach 2: ISOLATED world with predefined extractors
+  results.approaches.approach2_isolatedWorld = await testApproach2(targetTab.id);
+  
+  // Approach 3: Script element injection
+  results.approaches.approach3_scriptElement = await testApproach3(targetTab.id, test_script);
+  
+  // Approach 4: Blob URL injection
+  results.approaches.approach4_blobUrl = await testApproach4(targetTab.id, test_script);
+  
+  // Approach 5: Function serialization (LinkedIn-specific)
+  results.approaches.approach5_functionSerialization = await testApproach5(targetTab.id);
+  
+  // Approach 6: Dynamic selectors
+  results.approaches.approach6_dynamicSelectors = await testApproach6(targetTab.id);
+  
+  // Approach 7: Function constructor
+  results.approaches.approach7_functionConstructor = await testApproach7(targetTab.id, test_script);
+  
+  // Summary
+  const approaches = Object.values(results.approaches);
+  results.summary = {
+    total: approaches.length,
+    successful: approaches.filter(r => r.success).length,
+    failed: approaches.filter(r => !r.success).length,
+    csp_blocked: approaches.filter(r => r.csp_blocked).length,
+    recommended: approaches
+      .filter(r => r.success)
+      .sort((a, b) => (b.flexibility || 0) - (a.flexibility || 0))
+      .map(r => r.name)[0] || 'None'
+  };
+  
+  return results;
+}
+
+// Test approach implementations
+async function testApproach1(tabId, script) {
+  const name = 'MAIN world + eval()';
+  try {
+    const results = await browser.scripting.executeScript({
+      target: { tabId },
+      func: (scriptCode) => {
+        // eslint-disable-next-line no-eval
+        return eval(scriptCode);
+      },
+      args: [script],
+      world: 'MAIN'
+    });
+    return {
+      name,
+      success: true,
+      result: results[0]?.result,
+      flexibility: 10,
+      note: 'Full script execution, may be blocked by strict CSP'
+    };
+  } catch (error) {
+    return {
+      name,
+      success: false,
+      error: error.message,
+      csp_blocked: error.message.includes('Content Security Policy') || 
+                   error.message.includes('unsafe-eval'),
+      flexibility: 10
+    };
+  }
+}
+
+async function testApproach2(tabId) {
+  const name = 'ISOLATED world (no eval)';
+  try {
+    const results = await browser.scripting.executeScript({
+      target: { tabId },
+      func: () => {
+        return {
+          title: document.title,
+          url: window.location.href,
+          headingCount: document.querySelectorAll('h1, h2, h3').length,
+          linkCount: document.querySelectorAll('a').length,
+          buttonCount: document.querySelectorAll('button').length
+        };
+      },
+      world: 'ISOLATED'
+    });
+    return {
+      name,
+      success: true,
+      result: results[0]?.result,
+      flexibility: 3,
+      note: 'Predefined extractors only, not blocked by CSP'
+    };
+  } catch (error) {
+    return {
+      name,
+      success: false,
+      error: error.message,
+      flexibility: 3
+    };
+  }
+}
+
+async function testApproach3(tabId, script) {
+  const name = 'Script element injection';
+  const resultId = 'opendia-test-' + Date.now();
+  
+  try {
+    const results = await browser.scripting.executeScript({
+      target: { tabId },
+      func: (scriptCode, containerId) => {
+        return new Promise((resolve) => {
+          const container = document.createElement('div');
+          container.id = containerId;
+          container.style.display = 'none';
+          document.body.appendChild(container);
+          
+          const scriptEl = document.createElement('script');
+          scriptEl.textContent = `
+            try {
+              const __result = (${scriptCode});
+              document.getElementById('${containerId}').setAttribute('data-result', JSON.stringify(__result));
+              document.getElementById('${containerId}').setAttribute('data-success', 'true');
+            } catch (e) {
+              document.getElementById('${containerId}').setAttribute('data-error', e.message);
+            }
+          `;
+          
+          document.head.appendChild(scriptEl);
+          
+          setTimeout(() => {
+            const success = container.getAttribute('data-success') === 'true';
+            const result = container.getAttribute('data-result');
+            const error = container.getAttribute('data-error');
+            container.remove();
+            scriptEl.remove();
+            
+            resolve({
+              success,
+              result: success ? JSON.parse(result) : null,
+              error: error || null
+            });
+          }, 100);
+        });
+      },
+      args: [script, resultId],
+      world: 'MAIN'
+    });
+    
+    const inner = results[0]?.result;
+    return {
+      name,
+      success: inner?.success || false,
+      result: inner?.result,
+      error: inner?.error,
+      csp_blocked: inner?.error?.includes('CSP') || false,
+      flexibility: 8,
+      note: 'Creates <script> element, may be blocked by script-src CSP'
+    };
+  } catch (error) {
+    return {
+      name,
+      success: false,
+      error: error.message,
+      csp_blocked: error.message.includes('Content Security Policy'),
+      flexibility: 8
+    };
+  }
+}
+
+async function testApproach4(tabId, script) {
+  const name = 'Blob URL injection';
+  const resultId = 'opendia-blob-' + Date.now();
+  
+  try {
+    const results = await browser.scripting.executeScript({
+      target: { tabId },
+      func: (scriptCode, containerId) => {
+        return new Promise((resolve) => {
+          const container = document.createElement('div');
+          container.id = containerId;
+          container.style.display = 'none';
+          document.body.appendChild(container);
+          
+          const wrappedScript = `
+            try {
+              const __result = (${scriptCode});
+              document.getElementById('${containerId}').setAttribute('data-result', JSON.stringify(__result));
+              document.getElementById('${containerId}').setAttribute('data-success', 'true');
+            } catch (e) {
+              document.getElementById('${containerId}').setAttribute('data-error', e.message);
+            }
+          `;
+          
+          const blob = new Blob([wrappedScript], { type: 'application/javascript' });
+          const blobUrl = URL.createObjectURL(blob);
+          
+          const scriptEl = document.createElement('script');
+          scriptEl.src = blobUrl;
+          
+          scriptEl.onload = () => {
+            URL.revokeObjectURL(blobUrl);
+            setTimeout(() => {
+              const success = container.getAttribute('data-success') === 'true';
+              const result = container.getAttribute('data-result');
+              const error = container.getAttribute('data-error');
+              container.remove();
+              scriptEl.remove();
+              resolve({ success, result: success ? JSON.parse(result) : null, error });
+            }, 50);
+          };
+          
+          scriptEl.onerror = () => {
+            URL.revokeObjectURL(blobUrl);
+            container.remove();
+            scriptEl.remove();
+            resolve({ success: false, error: 'Blob script blocked by CSP' });
+          };
+          
+          document.head.appendChild(scriptEl);
+        });
+      },
+      args: [script, resultId],
+      world: 'MAIN'
+    });
+    
+    const inner = results[0]?.result;
+    return {
+      name,
+      success: inner?.success || false,
+      result: inner?.result,
+      error: inner?.error,
+      csp_blocked: inner?.error?.includes('CSP') || inner?.error?.includes('blob') || false,
+      flexibility: 8,
+      note: 'Creates blob URL script, may be blocked by blob: CSP directive'
+    };
+  } catch (error) {
+    return {
+      name,
+      success: false,
+      error: error.message,
+      csp_blocked: error.message.includes('Content Security Policy'),
+      flexibility: 8
+    };
+  }
+}
+
+async function testApproach5(tabId) {
+  const name = 'Function serialization (LinkedIn)';
+  try {
+    const results = await browser.scripting.executeScript({
+      target: { tabId },
+      func: () => {
+        const selectors = {
+          title: ['.job-details-jobs-unified-top-card__job-title', '.top-card-layout__title', 'h1'],
+          company: ['.job-details-jobs-unified-top-card__company-name', '.topcard__org-name-link'],
+          location: ['.job-details-jobs-unified-top-card__bullet', '.topcard__flavor--bullet'],
+          description: ['.jobs-description-content__text', '.description__text', '#job-details']
+        };
+        
+        const findFirst = (selectorList) => {
+          for (const sel of selectorList) {
+            const el = document.querySelector(sel);
+            if (el?.textContent?.trim()) return el.textContent.trim();
+          }
+          return null;
+        };
+        
+        return {
+          title: findFirst(selectors.title),
+          company: findFirst(selectors.company),
+          location: findFirst(selectors.location),
+          descriptionPreview: findFirst(selectors.description)?.substring(0, 200),
+          pageTitle: document.title,
+          url: window.location.href
+        };
+      },
+      world: 'MAIN'
+    });
+    return {
+      name,
+      success: true,
+      result: results[0]?.result,
+      flexibility: 5,
+      note: 'Pre-defined function, not blocked by CSP, LinkedIn-specific'
+    };
+  } catch (error) {
+    return {
+      name,
+      success: false,
+      error: error.message,
+      flexibility: 5
+    };
+  }
+}
+
+async function testApproach6(tabId) {
+  const name = 'Dynamic selectors';
+  const selectors = {
+    headings: 'h1, h2, h3',
+    buttons: 'button',
+    links: 'a[href]'
+  };
+  
+  try {
+    const results = await browser.scripting.executeScript({
+      target: { tabId },
+      func: (selectorMap) => {
+        const output = {};
+        for (const [key, selector] of Object.entries(selectorMap)) {
+          const elements = document.querySelectorAll(selector);
+          output[key] = Array.from(elements).slice(0, 5).map(el => el.textContent?.trim()).filter(Boolean);
+        }
+        return output;
+      },
+      args: [selectors],
+      world: 'MAIN'
+    });
+    return {
+      name,
+      success: true,
+      result: results[0]?.result,
+      flexibility: 6,
+      note: 'Dynamic selectors as args, not blocked by CSP'
+    };
+  } catch (error) {
+    return {
+      name,
+      success: false,
+      error: error.message,
+      flexibility: 6
+    };
+  }
+}
+
+async function testApproach7(tabId, script) {
+  const name = 'Function constructor';
+  try {
+    const results = await browser.scripting.executeScript({
+      target: { tabId },
+      func: (scriptCode) => {
+        try {
+          // Use Function constructor instead of eval
+          const fn = new Function('return ' + scriptCode);
+          return { success: true, result: fn() };
+        } catch (e) {
+          return { success: false, error: e.message };
+        }
+      },
+      args: [script],
+      world: 'MAIN'
+    });
+    
+    const inner = results[0]?.result;
+    return {
+      name,
+      success: inner?.success || false,
+      result: inner?.result,
+      error: inner?.error,
+      csp_blocked: inner?.error?.includes('Content Security Policy') || 
+                   inner?.error?.includes('unsafe-eval'),
+      flexibility: 10,
+      note: 'Uses new Function() instead of eval(), similar CSP restrictions'
+    };
+  } catch (error) {
+    return {
+      name,
+      success: false,
+      error: error.message,
+      csp_blocked: error.message.includes('Content Security Policy'),
+      flexibility: 10
+    };
   }
 }
 

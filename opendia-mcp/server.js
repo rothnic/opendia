@@ -1559,6 +1559,39 @@ function getFallbackTools() {
         required: ['mode']
       }
     }
+    ,
+    {
+      name: 'file_upload',
+      description:
+        '📁 Upload a file to a file input element. Fetches file from URL (bypasses CORS) and injects into file input using DataTransfer API. Perfect for form automation like LinkedIn Easy Apply.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          file_url: {
+            type: 'string',
+            description: 'URL to fetch the file from (can be localhost, bypasses CORS)'
+          },
+          file_name: {
+            type: 'string',
+            description: 'Name for the file (e.g., "resume.pdf")'
+          },
+          file_selector: {
+            type: 'string',
+            description: 'CSS selector for the file input element (default: input[type="file"])',
+            default: 'input[type="file"]'
+          },
+          mime_type: {
+            type: 'string',
+            description: 'MIME type (auto-detected from URL if not provided)'
+          },
+          tab_id: {
+            type: 'number',
+            description: 'Target tab ID (defaults to active tab)'
+          }
+        },
+        required: ['file_url', 'file_name']
+      }
+    }
   ];
 }
 

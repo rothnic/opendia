@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>File Upload Test</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    #result { margin-top: 20px; padding: 10px; background: #f0f0f0; }
+    #result.success { background: #d4edda; }
+  </style>
+</head>
+<body>
+  <h1>File Upload Test</h1>
+  <p>This page tests the file_upload MCP tool.</p>
+  
+  <label for="file-input">Select a file:</label>
+  <input type="file" id="file-input" accept=".pdf,.doc,.docx">
+  
+  <div id="result">No file selected</div>
+  
+  <script>
+    document.getElementById('file-input').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      const resultDiv = document.getElementById('result');
+      if (file) {
+        resultDiv.textContent = 'SUCCESS: ' + file.name + ' (' + file.size + ' bytes, ' + file.type + ')';
+        resultDiv.className = 'success';
+      } else {
+        resultDiv.textContent = 'No file selected';
+        resultDiv.className = '';
+      }
+    });
+  </script>
+</body>
+</html>

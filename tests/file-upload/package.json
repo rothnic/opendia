@@ -1,0 +1,13 @@
+{
+  "name": "file-upload-test",
+  "version": "1.0.0",
+  "description": "E2E test for OpenDia file_upload tool",
+  "type": "module",
+  "scripts": {
+    "test": "node file-upload.test.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.40.0",
+    "ws": "^8.18.0"
+  }
+}

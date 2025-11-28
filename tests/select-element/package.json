@@ -1,0 +1,13 @@
+{
+  "name": "select-element-test",
+  "version": "1.0.0",
+  "description": "E2E test for OpenDia select_element tool",
+  "type": "module",
+  "scripts": {
+    "test": "node select-element.test.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.40.0",
+    "ws": "^8.18.0"
+  }
+}

@@ -297,6 +297,9 @@ class BrowserAutomation {
         case "page_style":
           result = await this.handlePageStyle(data);
           break;
+        case "select_element":
+          result = await this.selectElement(data);
+          break;
         case "ping":
           // Health check for background tab content script readiness
           result = { status: "ready", timestamp: Date.now(), url: window.location.href };
@@ -775,7 +778,7 @@ class BrowserAutomation {
     const startTime = performance.now();
     const pageType = this.detectPageType();
 
-    // Use default max results limit  
+    // Use default max results limit
     max_results = Math.min(max_results, 7); // Allow slightly more for detailed analysis
 
     let elements = [];
@@ -2336,11 +2339,11 @@ class BrowserAutomation {
   // Check if two domains are the same (handles subdomains)
   isSameDomain(domain1, domain2) {
     if (!domain1 || !domain2) return false;
-    
+
     // Remove www. prefix for comparison
     const clean1 = domain1.replace(/^www\./, '');
     const clean2 = domain2.replace(/^www\./, '');
-    
+
     return clean1 === clean2;
   }
 
@@ -2363,7 +2366,7 @@ class BrowserAutomation {
       element_id = null,
       wait_after = 500
     } = options;
-    
+
     const startPosition = {
       x: window.scrollX,
       y: window.scrollY
@@ -2376,15 +2379,15 @@ class BrowserAutomation {
         if (!element) {
           throw new Error(`Element not found: ${element_id}`);
         }
-        
+
         element.scrollIntoView({
           behavior: smooth ? 'smooth' : 'instant',
           block: 'center',
           inline: 'center'
         });
-        
+
         await new Promise(resolve => setTimeout(resolve, wait_after));
-        
+
         return {
           success: true,
           previous_position: startPosition,
@@ -2421,7 +2424,7 @@ class BrowserAutomation {
       // Calculate scroll direction
       let scrollX = 0;
       let scrollY = 0;
-      
+
       switch (direction) {
         case 'up':
           scrollY = -scrollAmount;
@@ -2483,15 +2486,15 @@ class BrowserAutomation {
       } else {
         window.scrollBy(scrollX, scrollY);
       }
-      
+
       // Wait for scroll to complete
       await new Promise(resolve => setTimeout(resolve, wait_after));
-      
+
       const finalPosition = {
         x: window.scrollX,
         y: window.scrollY
       };
-      
+
       const actualScrolled = {
         x: finalPosition.x - startPosition.x,
         y: finalPosition.y - startPosition.y
@@ -2525,14 +2528,14 @@ class BrowserAutomation {
   // 🎨 Page Styling System
   async handlePageStyle(data) {
     const { mode, theme, background, text_color, font, font_size, mood, intensity, effect, duration, remember } = data;
-    
+
     // Remove existing custom styles
     const existingStyle = document.getElementById('opendia-custom-style');
     if (existingStyle) existingStyle.remove();
-    
+
     let css = '';
     let description = '';
-    
+
     try {
       switch (mode) {
         case 'preset':
@@ -2541,44 +2544,44 @@ class BrowserAutomation {
           css = themeData.css;
           description = `Applied ${themeData.name} theme`;
           break;
-          
+
         case 'custom':
           css = this.buildCustomCSS({ background, text_color, font, font_size });
           description = 'Applied custom styling';
           break;
-          
+
         case 'ai_mood':
           css = this.generateMoodCSS(mood, intensity);
           description = `Applied AI-generated style for mood: "${mood}"`;
           break;
-          
+
         case 'effect':
           css = this.applyEffect(effect, duration);
           description = `Applied ${effect} effect for ${duration}s`;
           break;
-          
+
         case 'reset':
           // CSS already removed above
           description = 'Reset page to original styling';
           break;
-          
+
         default:
           throw new Error(`Unknown styling mode: ${mode}`);
       }
-      
+
       if (css) {
         const styleElement = document.createElement('style');
         styleElement.id = 'opendia-custom-style';
         styleElement.textContent = css;
         document.head.appendChild(styleElement);
       }
-      
+
       // Remember preference if requested
       if (remember && mode !== 'reset') {
         const domain = window.location.hostname;
         chrome.storage.local.set({ [`style_${domain}`]: { mode, theme, css } });
       }
-      
+
       return {
         success: true,
         description,
@@ -2590,7 +2593,7 @@ class BrowserAutomation {
         mood,
         intensity
       };
-      
+
     } catch (error) {
       return {
         success: false,
@@ -2604,7 +2607,7 @@ class BrowserAutomation {
 
   buildCustomCSS({ background, text_color, font, font_size }) {
     let css = '';
-    
+
     if (background || text_color || font || font_size) {
       css += '* { ';
       if (background) css += `background: ${background} !important; `;
@@ -2613,7 +2616,7 @@ class BrowserAutomation {
       if (font_size) css += `font-size: ${font_size} !important; `;
       css += '}';
     }
-    
+
     return css;
   }
 
@@ -2621,7 +2624,7 @@ class BrowserAutomation {
     const moodMap = {
       'cozy coffee shop': {
         background: '#2c1810',
-        text: '#f4e4bc', 
+        text: '#f4e4bc',
         accent: '#d4af37',
         font: 'Georgia, serif'
       },
@@ -2645,34 +2648,34 @@ class BrowserAutomation {
         text: '#ffffff'
       }
     };
-    
+
     const style = moodMap[mood.toLowerCase()] || moodMap['cozy coffee shop'];
     return this.buildMoodCSS(style, intensity);
   }
 
   buildMoodCSS(style, intensity) {
     const opacity = intensity === 'subtle' ? '0.3' : intensity === 'medium' ? '0.6' : '0.9';
-    
+
     let css = `
       body {
         background: ${style.background} !important;
         color: ${style.text} !important;
         ${style.font ? `font-family: ${style.font} !important;` : ''}
       }
-      
+
       * {
         color: ${style.text} !important;
       }
-      
+
       a {
         color: ${style.accent || style.text} !important;
       }
     `;
-    
+
     if (style.effects) {
       css += style.effects;
     }
-    
+
     // Add animation keyframes if needed
     if (style.effects && style.effects.includes('energyPulse')) {
       css += `
@@ -2682,7 +2685,7 @@ class BrowserAutomation {
         }
       `;
     }
-    
+
     if (style.effects && style.effects.includes('gentleWave')) {
       css += `
         @keyframes gentleWave {
@@ -2691,7 +2694,7 @@ class BrowserAutomation {
         }
       `;
     }
-    
+
     return css;
   }
 
@@ -2699,39 +2702,39 @@ class BrowserAutomation {
     const effects = {
       matrix_rain: `
         body::after {
-          content: ''; 
-          position: fixed; 
-          top: 0; 
-          left: 0; 
-          width: 100%; 
+          content: '';
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
           height: 100%;
           background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="10" font-size="8" fill="%2300ff00">0</text><text y="20" font-size="8" fill="%2300ff00">1</text><text y="30" font-size="8" fill="%2300ff00">0</text><text y="40" font-size="8" fill="%2300ff00">1</text></svg>');
           animation: matrixFall 2s linear infinite;
-          pointer-events: none; 
-          z-index: 9999; 
+          pointer-events: none;
+          z-index: 9999;
           opacity: 0.7;
         }
-        @keyframes matrixFall { 
-          from { transform: translateY(-100px); } 
-          to { transform: translateY(100vh); } 
+        @keyframes matrixFall {
+          from { transform: translateY(-100px); }
+          to { transform: translateY(100vh); }
         }
       `,
       floating_particles: `
         body::before {
-          content: '✨ 🌟 ⭐ 💫'; 
-          position: fixed; 
-          top: 0; 
-          left: 0; 
-          width: 100%; 
+          content: '✨ 🌟 ⭐ 💫';
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
           height: 100%;
           animation: floatParticles 6s ease-in-out infinite;
-          pointer-events: none; 
-          z-index: 9999; 
+          pointer-events: none;
+          z-index: 9999;
           font-size: 20px;
         }
-        @keyframes floatParticles { 
-          0%, 100% { transform: translateY(100vh) rotate(0deg); } 
-          50% { transform: translateY(-100px) rotate(180deg); } 
+        @keyframes floatParticles {
+          0%, 100% { transform: translateY(100vh) rotate(0deg); }
+          50% { transform: translateY(-100px) rotate(180deg); }
         }
       `,
       cursor_trail: `
@@ -2743,7 +2746,7 @@ class BrowserAutomation {
         * {
           text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff, 0 0 30px #00ffff !important;
         }
-        
+
         a, button {
           box-shadow: 0 0 15px #ff00ff !important;
         }
@@ -2758,9 +2761,9 @@ class BrowserAutomation {
         }
       `
     };
-    
+
     const css = effects[effect] || '';
-    
+
     // Auto-remove effect after duration
     if (duration && duration > 0) {
       setTimeout(() => {
@@ -2768,8 +2771,234 @@ class BrowserAutomation {
         if (effectStyle) effectStyle.remove();
       }, duration * 1000);
     }
-    
+
     return css;
+  }
+
+  // 🎯 INTERACTIVE SELECTION TOOL
+  async selectElement(data) {
+    console.log("🎯 Starting interactive element selection");
+
+    return new Promise((resolve, reject) => {
+      this.selectionResolve = resolve;
+      this.selectionReject = reject;
+      this.enableSelectionMode();
+
+      // Timeout after 60 seconds if no selection
+      this.selectionTimeout = setTimeout(() => {
+        this.disableSelectionMode();
+        reject(new Error("Selection timed out after 60 seconds"));
+      }, 60000);
+    });
+  }
+
+  enableSelectionMode() {
+    // Create overlay element if it doesn't exist
+    if (!this.selectionOverlay) {
+      this.selectionOverlay = document.createElement('div');
+      this.selectionOverlay.id = 'opendia-selection-overlay';
+      this.selectionOverlay.style.cssText = `
+        position: fixed;
+        pointer-events: none;
+        background: rgba(0, 150, 255, 0.2);
+        border: 2px solid #0096ff;
+        z-index: 2147483647;
+        transition: all 0.1s ease;
+        border-radius: 4px;
+        box-shadow: 0 0 10px rgba(0, 150, 255, 0.5);
+      `;
+
+      this.selectionLabel = document.createElement('div');
+      this.selectionLabel.style.cssText = `
+        position: absolute;
+        top: -28px;
+        left: 0;
+        background: #0096ff;
+        color: white;
+        padding: 4px 8px;
+        font-family: monospace;
+        font-size: 12px;
+        border-radius: 4px;
+        white-space: nowrap;
+        pointer-events: none;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      `;
+      this.selectionOverlay.appendChild(this.selectionLabel);
+      document.body.appendChild(this.selectionOverlay);
+    }
+
+    // Bind handlers
+    this.boundHoverHandler = this.handleSelectionHover.bind(this);
+    this.boundClickHandler = this.handleSelectionClick.bind(this);
+    this.boundEscHandler = this.handleSelectionEsc.bind(this);
+
+    // Add listeners with capture to ensure we get them first
+    document.addEventListener('mouseover', this.boundHoverHandler, true);
+    document.addEventListener('click', this.boundClickHandler, true);
+    document.addEventListener('keydown', this.boundEscHandler, true);
+
+    // Add global cursor style
+    this.originalBodyCursor = document.body.style.cursor;
+    document.body.style.cursor = 'crosshair';
+
+    console.log("🎯 Selection mode enabled");
+  }
+
+  disableSelectionMode() {
+    // Remove listeners
+    document.removeEventListener('mouseover', this.boundHoverHandler, true);
+    document.removeEventListener('click', this.boundClickHandler, true);
+    document.removeEventListener('keydown', this.boundEscHandler, true);
+
+    // Remove overlay
+    if (this.selectionOverlay) {
+      this.selectionOverlay.remove();
+      this.selectionOverlay = null;
+    }
+
+    // Restore cursor
+    document.body.style.cursor = this.originalBodyCursor || '';
+
+    // Clear timeout
+    if (this.selectionTimeout) {
+      clearTimeout(this.selectionTimeout);
+      this.selectionTimeout = null;
+    }
+
+    console.log("🎯 Selection mode disabled");
+  }
+
+  handleSelectionHover(event) {
+    event.stopPropagation();
+    const target = event.target;
+
+    // Don't highlight the overlay itself (though pointer-events: none should prevent this)
+    if (target === this.selectionOverlay || this.selectionOverlay.contains(target)) return;
+
+    const rect = target.getBoundingClientRect();
+
+    this.selectionOverlay.style.top = rect.top + 'px';
+    this.selectionOverlay.style.left = rect.left + 'px';
+    this.selectionOverlay.style.width = rect.width + 'px';
+    this.selectionOverlay.style.height = rect.height + 'px';
+
+    // Update label
+    const tagName = target.tagName.toLowerCase();
+    const id = target.id ? '#' + target.id : '';
+    const classes = Array.from(target.classList).map(c => '.' + c).join('');
+    this.selectionLabel.textContent = `${tagName}${id}${classes}`;
+  }
+
+  handleSelectionClick(event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const target = event.target;
+    this.disableSelectionMode();
+
+    // Extract info
+    const info = {
+      tagName: target.tagName.toLowerCase(),
+      id: target.id,
+      classes: Array.from(target.classList),
+      attributes: this.getAttributes(target),
+      textContent: target.textContent.trim().substring(0, 500),
+      html: this.getTruncatedHTML(target),
+      parent: this.getParentInfo(target),
+      path: this.getCssPath(target)
+    };
+
+    if (this.selectionResolve) {
+      this.selectionResolve(info);
+      this.selectionResolve = null;
+    }
+  }
+
+  handleSelectionEsc(event) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      this.disableSelectionMode();
+      if (this.selectionReject) {
+        this.selectionReject(new Error("Selection cancelled by user"));
+        this.selectionReject = null;
+      }
+    }
+  }
+
+  getAttributes(element) {
+    const attrs = {};
+    for (const attr of element.attributes) {
+      attrs[attr.name] = attr.value;
+    }
+    return attrs;
+  }
+
+  getTruncatedHTML(element) {
+    // Clone to avoid modifying the actual element
+    const clone = element.cloneNode(true);
+
+    // Remove scripts and styles to reduce noise
+    const scripts = clone.querySelectorAll('script, style');
+    scripts.forEach(s => s.remove());
+
+    // Truncate long text content in children
+    const walker = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT, null, false);
+    let node;
+    while (node = walker.nextNode()) {
+      if (node.textContent.length > 100) {
+        node.textContent = node.textContent.substring(0, 100) + '...';
+      }
+    }
+
+    // Truncate SVG content
+    const svgs = clone.querySelectorAll('svg');
+    svgs.forEach(svg => {
+      svg.innerHTML = '<!-- SVG content truncated -->';
+    });
+
+    // Get HTML and truncate if still too long
+    let html = clone.outerHTML;
+    if (html.length > 5000) {
+      html = html.substring(0, 5000) + '... <!-- Truncated -->';
+    }
+
+    return html;
+  }
+
+  getParentInfo(element) {
+    const parent = element.parentElement;
+    if (!parent) return null;
+
+    return {
+      tagName: parent.tagName.toLowerCase(),
+      id: parent.id,
+      classes: Array.from(parent.classList)
+    };
+  }
+
+  getCssPath(el) {
+    if (!(el instanceof Element)) return;
+    const path = [];
+    while (el.nodeType === Node.ELEMENT_NODE) {
+      let selector = el.nodeName.toLowerCase();
+      if (el.id) {
+        selector += '#' + el.id;
+        path.unshift(selector);
+        break;
+      } else {
+        let sib = el, nth = 1;
+        while (sib = sib.previousElementSibling) {
+          if (sib.nodeName.toLowerCase() == selector)
+            nth++;
+        }
+        if (nth != 1)
+          selector += ":nth-of-type("+nth+")";
+      }
+      path.unshift(selector);
+      el = el.parentNode;
+    }
+    return path.join(" > ");
   }
 }
 
@@ -2778,13 +3007,13 @@ const THEME_PRESETS = {
   "dark_hacker": {
     name: "🖤 Dark Hacker",
     css: `
-      * { 
-        background: #0a0a0a !important; 
-        color: #00ff00 !important; 
+      * {
+        background: #0a0a0a !important;
+        color: #00ff00 !important;
         font-family: 'Courier New', monospace !important;
       }
       a { color: #00ffff !important; }
-      body::before { 
+      body::before {
         content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="50" font-size="10" fill="%23003300">01010101</text></svg>');
         opacity: 0.1; pointer-events: none; z-index: -1;
@@ -2792,9 +3021,9 @@ const THEME_PRESETS = {
     `
   },
   "retro_80s": {
-    name: "📼 Retro 80s", 
+    name: "📼 Retro 80s",
     css: `
-      * { 
+      * {
         background: linear-gradient(45deg, #ff0080, #8000ff) !important;
         color: #ffffff !important;
         font-family: 'Arial Black', sans-serif !important;
@@ -2807,14 +3036,14 @@ const THEME_PRESETS = {
   "rainbow_party": {
     name: "🌈 Rainbow Party",
     css: `
-      body { 
+      body {
         background: linear-gradient(45deg, red, orange, yellow, green, blue, indigo, violet) !important;
         background-size: 400% 400% !important;
         animation: rainbowShift 3s ease infinite !important;
       }
-      @keyframes rainbowShift { 
-        0%, 100% { background-position: 0% 50%; } 
-        50% { background-position: 100% 50%; } 
+      @keyframes rainbowShift {
+        0%, 100% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
       }
       * { color: white !important; text-shadow: 1px 1px 2px black !important; }
     `
@@ -2853,7 +3082,7 @@ const THEME_PRESETS = {
       }
       a { color: #00ffff !important; }
       body {
-        background-image: 
+        background-image:
           linear-gradient(90deg, transparent 79px, #abced4 79px, #abced4 81px, transparent 81px),
           linear-gradient(#eee .1em, transparent .1em);
         background-size: 81px 1.2em;
@@ -2880,11 +3109,11 @@ const THEME_PRESETS = {
         font-family: 'Times New Roman', serif !important;
         line-height: 1.4 !important;
       }
-      body { 
-        column-count: 2; 
-        column-gap: 2em; 
-        max-width: 1200px; 
-        margin: 0 auto; 
+      body {
+        column-count: 2;
+        column-gap: 2em;
+        max-width: 1200px;
+        margin: 0 auto;
         padding: 20px;
       }
     `

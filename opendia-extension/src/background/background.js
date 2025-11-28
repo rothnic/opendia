@@ -1193,6 +1193,20 @@ function getAvailableTools() {
         },
         required: ['file_url', 'file_name']
       }
+    },
+    {
+      name: 'select_element',
+      description:
+        '🎯 INTERACTIVE SELECTION: Allows the user to select an element on the page by highlighting it (similar to DevTools). Returns the HTML of the selected element (truncated if too long) and a summary of its attributes and parent. Useful when you need the user to point out a specific element.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          tab_id: {
+            type: 'number',
+            description: 'Target tab ID (defaults to active tab)'
+          }
+        }
+      }
     }
   ];
 }
@@ -1284,6 +1298,9 @@ async function handleMCPRequest(message) {
         break;
       case 'file_upload':
         result = await uploadFileToInput(params);
+        break;
+      case 'select_element':
+        result = await sendToContentScript('select_element', params, params.tab_id);
         break;
       default:
         throw new Error(`Unknown method: ${method}`);
@@ -2393,17 +2410,17 @@ async function executeScriptInTab(params) {
  * Background scripts have no CORS restrictions, so we can fetch from any URL
  */
 async function uploadFileToInput(params) {
-  const { 
-    file_url, 
-    file_name, 
+  const {
+    file_url,
+    file_name,
     file_selector = 'input[type="file"]',
     mime_type,
-    tab_id 
+    tab_id
   } = params;
 
   // Step 1: Fetch the file in background script (no CORS restrictions)
   console.log(`📁 Fetching file from: ${file_url}`);
-  
+
   let response;
   try {
     response = await fetch(file_url);
@@ -2418,7 +2435,7 @@ async function uploadFileToInput(params) {
   const arrayBuffer = await response.arrayBuffer();
   const contentType = mime_type || response.headers.get('Content-Type') || 'application/octet-stream';
   const fileBytes = Array.from(new Uint8Array(arrayBuffer));
-  
+
   console.log(`📁 Fetched ${fileBytes.length} bytes, type: ${contentType}`);
 
   // Step 2: Get target tab
@@ -2462,8 +2479,8 @@ async function uploadFileToInput(params) {
         input.dispatchEvent(new Event('change', { bubbles: true }));
       }
 
-      return { 
-        success: true, 
+      return {
+        success: true,
         fileName: file.name,
         fileSize: file.size,
         mimeType: file.type,
@@ -2475,7 +2492,7 @@ async function uploadFileToInput(params) {
   });
 
   const injectionResult = results[0]?.result;
-  
+
   if (!injectionResult?.success) {
     throw new Error(injectionResult?.error || 'File injection failed');
   }
@@ -2500,7 +2517,7 @@ async function uploadFileToInput(params) {
  */
 async function testCspBypassApproaches(params) {
   const { tab_id, test_script = 'document.title' } = params;
-  
+
   let targetTab;
   if (tab_id) {
     try {
@@ -2518,7 +2535,7 @@ async function testCspBypassApproaches(params) {
     }
     targetTab = activeTab;
   }
-  
+
   const results = {
     tab_id: targetTab.id,
     url: targetTab.url,
@@ -2527,28 +2544,28 @@ async function testCspBypassApproaches(params) {
     timestamp: new Date().toISOString(),
     approaches: {}
   };
-  
+
   // Approach 1: MAIN world + eval (current implementation)
   results.approaches.approach1_mainWorldEval = await testApproach1(targetTab.id, test_script);
-  
+
   // Approach 2: ISOLATED world with predefined extractors
   results.approaches.approach2_isolatedWorld = await testApproach2(targetTab.id);
-  
+
   // Approach 3: Script element injection
   results.approaches.approach3_scriptElement = await testApproach3(targetTab.id, test_script);
-  
+
   // Approach 4: Blob URL injection
   results.approaches.approach4_blobUrl = await testApproach4(targetTab.id, test_script);
-  
+
   // Approach 5: Function serialization (LinkedIn-specific)
   results.approaches.approach5_functionSerialization = await testApproach5(targetTab.id);
-  
+
   // Approach 6: Dynamic selectors
   results.approaches.approach6_dynamicSelectors = await testApproach6(targetTab.id);
-  
+
   // Approach 7: Function constructor
   results.approaches.approach7_functionConstructor = await testApproach7(targetTab.id, test_script);
-  
+
   // Summary
   const approaches = Object.values(results.approaches);
   results.summary = {
@@ -2561,7 +2578,7 @@ async function testCspBypassApproaches(params) {
       .sort((a, b) => (b.flexibility || 0) - (a.flexibility || 0))
       .map(r => r.name)[0] || 'None'
   };
-  
+
   return results;
 }
 
@@ -2590,7 +2607,7 @@ async function testApproach1(tabId, script) {
       name,
       success: false,
       error: error.message,
-      csp_blocked: error.message.includes('Content Security Policy') || 
+      csp_blocked: error.message.includes('Content Security Policy') ||
                    error.message.includes('unsafe-eval'),
       flexibility: 10
     };
@@ -2633,7 +2650,7 @@ async function testApproach2(tabId) {
 async function testApproach3(tabId, script) {
   const name = 'Script element injection';
   const resultId = 'opendia-test-' + Date.now();
-  
+
   try {
     const results = await browser.scripting.executeScript({
       target: { tabId },
@@ -2643,7 +2660,7 @@ async function testApproach3(tabId, script) {
           container.id = containerId;
           container.style.display = 'none';
           document.body.appendChild(container);
-          
+
           const scriptEl = document.createElement('script');
           scriptEl.textContent = `
             try {
@@ -2654,16 +2671,16 @@ async function testApproach3(tabId, script) {
               document.getElementById('${containerId}').setAttribute('data-error', e.message);
             }
           `;
-          
+
           document.head.appendChild(scriptEl);
-          
+
           setTimeout(() => {
             const success = container.getAttribute('data-success') === 'true';
             const result = container.getAttribute('data-result');
             const error = container.getAttribute('data-error');
             container.remove();
             scriptEl.remove();
-            
+
             resolve({
               success,
               result: success ? JSON.parse(result) : null,
@@ -2675,7 +2692,7 @@ async function testApproach3(tabId, script) {
       args: [script, resultId],
       world: 'MAIN'
     });
-    
+
     const inner = results[0]?.result;
     return {
       name,
@@ -2700,7 +2717,7 @@ async function testApproach3(tabId, script) {
 async function testApproach4(tabId, script) {
   const name = 'Blob URL injection';
   const resultId = 'opendia-blob-' + Date.now();
-  
+
   try {
     const results = await browser.scripting.executeScript({
       target: { tabId },
@@ -2710,7 +2727,7 @@ async function testApproach4(tabId, script) {
           container.id = containerId;
           container.style.display = 'none';
           document.body.appendChild(container);
-          
+
           const wrappedScript = `
             try {
               const __result = (${scriptCode});
@@ -2720,13 +2737,13 @@ async function testApproach4(tabId, script) {
               document.getElementById('${containerId}').setAttribute('data-error', e.message);
             }
           `;
-          
+
           const blob = new Blob([wrappedScript], { type: 'application/javascript' });
           const blobUrl = URL.createObjectURL(blob);
-          
+
           const scriptEl = document.createElement('script');
           scriptEl.src = blobUrl;
-          
+
           scriptEl.onload = () => {
             URL.revokeObjectURL(blobUrl);
             setTimeout(() => {
@@ -2738,21 +2755,21 @@ async function testApproach4(tabId, script) {
               resolve({ success, result: success ? JSON.parse(result) : null, error });
             }, 50);
           };
-          
+
           scriptEl.onerror = () => {
             URL.revokeObjectURL(blobUrl);
             container.remove();
             scriptEl.remove();
             resolve({ success: false, error: 'Blob script blocked by CSP' });
           };
-          
+
           document.head.appendChild(scriptEl);
         });
       },
       args: [script, resultId],
       world: 'MAIN'
     });
-    
+
     const inner = results[0]?.result;
     return {
       name,
@@ -2786,7 +2803,7 @@ async function testApproach5(tabId) {
           location: ['.job-details-jobs-unified-top-card__bullet', '.topcard__flavor--bullet'],
           description: ['.jobs-description-content__text', '.description__text', '#job-details']
         };
-        
+
         const findFirst = (selectorList) => {
           for (const sel of selectorList) {
             const el = document.querySelector(sel);
@@ -2794,7 +2811,7 @@ async function testApproach5(tabId) {
           }
           return null;
         };
-        
+
         return {
           title: findFirst(selectors.title),
           company: findFirst(selectors.company),
@@ -2830,7 +2847,7 @@ async function testApproach6(tabId) {
     buttons: 'button',
     links: 'a[href]'
   };
-  
+
   try {
     const results = await browser.scripting.executeScript({
       target: { tabId },
@@ -2879,14 +2896,14 @@ async function testApproach7(tabId, script) {
       args: [script],
       world: 'MAIN'
     });
-    
+
     const inner = results[0]?.result;
     return {
       name,
       success: inner?.success || false,
       result: inner?.result,
       error: inner?.error,
-      csp_blocked: inner?.error?.includes('Content Security Policy') || 
+      csp_blocked: inner?.error?.includes('Content Security Policy') ||
                    inner?.error?.includes('unsafe-eval'),
       flexibility: 10,
       note: 'Uses new Function() instead of eval(), similar CSP restrictions'

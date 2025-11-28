@@ -1591,6 +1591,20 @@ function getFallbackTools() {
         },
         required: ['file_url', 'file_name']
       }
+    },
+    {
+      name: 'select_element',
+      description:
+        '🎯 INTERACTIVE SELECTION: Allows the user to select an element on the page by highlighting it (similar to DevTools). Returns the HTML of the selected element (truncated if too long) and a summary of its attributes and parent. Useful when you need the user to point out a specific element.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          tab_id: {
+            type: 'number',
+            description: 'Target tab ID (defaults to active tab)'
+          }
+        }
+      }
     }
   ];
 }

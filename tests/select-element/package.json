@@ -4,7 +4,8 @@
   "description": "E2E test for OpenDia select_element tool",
   "type": "module",
   "scripts": {
-    "test": "node select-element.test.js"
+    "test": "node select-element.test.js",
+    "test:interactive": "node interactive-test.js"
   },
   "devDependencies": {
     "playwright": "^1.40.0",

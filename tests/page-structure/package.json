@@ -6,7 +6,6 @@
   "scripts": {
     "test": "node page-structure.test.js",
     "test:format": "node format-comparison.test.js",
-    "test:modes": "node modes.test.js",
     "test:comprehensive": "node comprehensive.test.js"
   },
   "devDependencies": {

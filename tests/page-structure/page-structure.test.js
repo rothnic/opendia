@@ -281,7 +281,7 @@ class TestRunner {
       const data1 = JSON.parse(result1.content[0].text);
 
       console.log('\nStructure stats:');
-      console.log(`  URL: ${data1.stats.url}`);
+      console.log(`  URL: ${data1.metadata.url}`);
       console.log(`  Total nodes: ${this.countNodes(data1.outline)}`);
 
       // Validate landmarks

@@ -18,8 +18,12 @@
     "notifications",
     "bookmarks",
     "history",
-    "alarms"
+    "alarms",
+    "sidePanel"
   ],
+  "side_panel": {
+    "default_path": "src/sidepanel/sidepanel.html"
+  },
   "host_permissions": [
     "<all_urls>"
   ],

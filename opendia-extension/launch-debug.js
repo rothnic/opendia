@@ -8,8 +8,8 @@ const CHROME_PATH = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrom
 const EXTENSION_PATH = path.resolve(__dirname, 'dist/chrome');
 const USER_DATA_DIR = path.resolve(__dirname, '.chrome-debug-data');
 const MCP_SERVER_SCRIPT = path.resolve(__dirname, '../opendia-mcp/server.js');
-const WS_PORT = 6000;
-const HTTP_PORT = 6001;
+const WS_PORT = 5100;
+const HTTP_PORT = 5101;
 
 // Ensure directories exist
 if (!fs.existsSync(EXTENSION_PATH)) {

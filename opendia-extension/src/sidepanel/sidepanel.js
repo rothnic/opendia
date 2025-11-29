@@ -60,7 +60,7 @@ async function analyzeCurrentPage() {
 
     // Send message to content script to get page structure
     const response = await chrome.tabs.sendMessage(tab.id, {
-      action: 'getPageStructure',
+      action: 'page_structure',
       data: {
         format: 'compact',
         max_depth: 8,

@@ -77,7 +77,16 @@ async function analyzeCurrentPage() {
 
   } catch (error) {
     console.error('Error analyzing page:', error);
-    contentEl.textContent = `Error: ${error.message}\n\nMake sure you're on a valid webpage (not chrome:// or extension pages).`;
+
+    let errorMsg = `Error: ${error.message}`;
+
+    if (error.message.includes('Receiving end does not exist') || error.message.includes('Could not establish connection')) {
+      errorMsg = '⚠️ Content script not loaded.\n\nPlease refresh the webpage (Cmd+R / F5) to inject the OpenDia extension, then try again.';
+    } else if (error.message.includes('No active tab')) {
+      errorMsg = '⚠️ No active tab found.\n\nPlease select a webpage tab.';
+    }
+
+    contentEl.textContent = errorMsg;
     statsEl.classList.add('hidden');
   } finally {
     refreshBtn.disabled = false;

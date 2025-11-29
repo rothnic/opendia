@@ -81,7 +81,7 @@ function launchChrome() {
     '--v=1',
     '--no-first-run',
     '--no-default-browser-check',
-    'about:blank'
+    'https://example.com'
   ];
 
   chrome = spawn(CHROME_PATH, args, {

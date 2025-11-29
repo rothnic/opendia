@@ -1208,24 +1208,34 @@ function getAvailableTools() {
         }
       }
     },
+
     {
       name: 'page_structure',
       description:
-        '🏗️ BUILD PAGE OUTLINE: Analyzes page structure with multiple modes: overview (general), navigation (interactive elements), scraping (repeated patterns), toon (ultra-compact). Returns element IDs for targeting.',
+        '🏗️ BUILD PAGE OUTLINE: Comprehensive analysis of page structure, metadata, and repeated patterns. Returns a unified tree with unique IDs for every element, allowing precise targeting. Automatically identifies repeated groups (e.g., product lists) and generates robust selectors for scraping. Detects pagination and interactive elements.',
       inputSchema: {
         type: 'object',
         properties: {
-          mode: {
-            type: 'string',
-            enum: ['overview', 'navigation', 'scraping', 'toon'],
-            default: 'overview',
-            description: 'Mode: overview=general structure, navigation=clickable elements, scraping=data patterns, toon=ultra-compact'
-          },
           format: {
             type: 'string',
             enum: ['compact', 'json'],
             default: 'compact',
-            description: 'Output format: compact (recommended) or json'
+            description: 'Output format: compact (recommended text tree) or json'
+          },
+          include_interactive: {
+            type: 'boolean',
+            default: true,
+            description: 'Include interactive elements (buttons, links, inputs)'
+          },
+          include_structure: {
+            type: 'boolean',
+            default: true,
+            description: 'Include structural landmarks and containers'
+          },
+          include_metadata: {
+            type: 'boolean',
+            default: true,
+            description: 'Include page metadata and pagination info'
           },
           max_depth: {
             type: 'number',

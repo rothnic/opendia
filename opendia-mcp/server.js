@@ -1609,7 +1609,7 @@ function getFallbackTools() {
     {
       name: 'page_structure',
       description:
-        '🏗️ BUILD PAGE OUTLINE: Creates a hierarchical structural outline of the current page with intelligent grouping of repeated elements. Returns a tree with bounding boxes, interactive elements, landmarks, and text previews. Perfect for understanding complex page layouts. Default format is compact text (much more efficient than JSON).',
+        '🏗️ BUILD PAGE OUTLINE: Comprehensive analysis of page structure, metadata, and repeated patterns. Returns a unified tree with unique IDs for every element, allowing precise targeting. Automatically identifies repeated groups (e.g., product lists) and generates robust selectors for scraping. Detects pagination and interactive elements.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -1617,35 +1617,50 @@ function getFallbackTools() {
             type: 'string',
             enum: ['compact', 'json'],
             default: 'compact',
-            description: 'Output format: "compact" (efficient text tree) or "json" (full nested structure)'
+            description: 'Output format: compact (recommended text tree) or json'
+          },
+          include_interactive: {
+            type: 'boolean',
+            default: true,
+            description: 'Include interactive elements (buttons, links, inputs)'
+          },
+          include_structure: {
+            type: 'boolean',
+            default: true,
+            description: 'Include structural landmarks and containers'
+          },
+          include_metadata: {
+            type: 'boolean',
+            default: true,
+            description: 'Include page metadata and pagination info'
           },
           max_depth: {
             type: 'number',
             default: 8,
-            description: 'Maximum depth to traverse the DOM tree'
+            description: 'Maximum depth to traverse'
           },
           max_nodes: {
             type: 'number',
             default: 400,
-            description: 'Maximum number of nodes to include in the outline'
+            description: 'Maximum nodes in outline'
           },
           max_children_per_group: {
             type: 'number',
             default: 6,
-            description: 'Maximum siblings before grouping them'
+            description: 'Max siblings before grouping'
           },
           examples_per_group: {
             type: 'number',
             default: 3,
-            description: 'Number of example nodes to show for grouped elements'
+            description: 'Examples to show per group'
           },
           tab_id: {
             type: 'number',
-            description: 'Target tab ID (defaults to active tab)'
+            description: 'Target tab ID'
           }
         }
       }
-    }
+    },
   ];
 }
 

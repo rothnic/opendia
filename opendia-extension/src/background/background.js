@@ -1211,41 +1211,77 @@ function getAvailableTools() {
     {
       name: 'page_structure',
       description:
-        '🏗️ BUILD PAGE OUTLINE: Creates a hierarchical structural outline of the current page with intelligent grouping of repeated elements. Returns a tree with bounding boxes, interactive elements, landmarks, and text previews. Perfect for understanding complex page layouts. Default format is compact text (much more efficient than JSON).',
+        '🏗️ BUILD PAGE OUTLINE: Analyzes page structure with multiple modes: overview (general), navigation (interactive elements), scraping (repeated patterns), toon (ultra-compact). Returns element IDs for targeting.',
       inputSchema: {
         type: 'object',
         properties: {
+          mode: {
+            type: 'string',
+            enum: ['overview', 'navigation', 'scraping', 'toon'],
+            default: 'overview',
+            description: 'Mode: overview=general structure, navigation=clickable elements, scraping=data patterns, toon=ultra-compact'
+          },
           format: {
             type: 'string',
             enum: ['compact', 'json'],
             default: 'compact',
-            description: 'Output format: "compact" (efficient text tree) or "json" (full nested structure)'
+            description: 'Output format: compact (recommended) or json'
           },
           max_depth: {
             type: 'number',
             default: 8,
-            description: 'Maximum depth to traverse the DOM tree'
+            description: 'Maximum depth to traverse'
           },
           max_nodes: {
             type: 'number',
             default: 400,
-            description: 'Maximum number of nodes to include in the outline'
+            description: 'Maximum nodes in outline'
           },
           max_children_per_group: {
             type: 'number',
             default: 6,
-            description: 'Maximum siblings before grouping them'
+            description: 'Max siblings before grouping'
           },
           examples_per_group: {
             type: 'number',
             default: 3,
-            description: 'Number of example nodes to show for grouped elements'
+            description: 'Examples to show per group'
           },
           tab_id: {
             type: 'number',
-            description: 'Target tab ID (defaults to active tab)'
+            description: 'Target tab ID'
           }
         }
+      }
+    },
+    {
+      name: 'page_structure_extract',
+      description:
+        '📤 EXTRACT ELEMENT: Extracts content from elements by ID (from page_structure). Supports single elements or groups. Multiple output formats.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          element_id: {
+            type: 'string',
+            description: 'Element ID from page_structure (e.g., "nav-0", "group-0")'
+          },
+          format: {
+            type: 'string',
+            enum: ['text', 'html', 'markdown', 'json'],
+            default: 'text',
+            description: 'Output format for extracted content'
+          },
+          include_children: {
+            type: 'boolean',
+            default: true,
+            description: 'Include child elements in extraction'
+          },
+          tab_id: {
+            type: 'number',
+            description: 'Target tab ID'
+          }
+        },
+        required: ['element_id']
       }
     }
   ];
@@ -1344,6 +1380,9 @@ async function handleMCPRequest(message) {
         break;
       case 'page_structure':
         result = await sendToContentScript('page_structure', params, params.tab_id);
+        break;
+      case 'page_structure_extract':
+        result = await sendToContentScript('page_structure_extract', params, params.tab_id);
         break;
       default:
         throw new Error(`Unknown method: ${method}`);

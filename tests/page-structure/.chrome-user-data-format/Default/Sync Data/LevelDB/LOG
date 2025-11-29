@@ -1,2 +1,3 @@
-2025/11/28-22:33:25.980 388014f Creating DB /Users/nroth/workspace/opendia-1/tests/page-structure/.chrome-user-data-format/Default/Sync Data/LevelDB since it was missing.
-2025/11/28-22:33:26.018 388014f Reusing MANIFEST /Users/nroth/workspace/opendia-1/tests/page-structure/.chrome-user-data-format/Default/Sync Data/LevelDB/MANIFEST-000001
+2025/11/29-12:32:19.140 3a8b3f5 Reusing MANIFEST /Users/nroth/workspace/opendia-1/tests/page-structure/.chrome-user-data-format/Default/Sync Data/LevelDB/MANIFEST-000001
+2025/11/29-12:32:19.152 3a8b3f5 Recovering log #3
+2025/11/29-12:32:19.152 3a8b3f5 Reusing old log /Users/nroth/workspace/opendia-1/tests/page-structure/.chrome-user-data-format/Default/Sync Data/LevelDB/000003.log 

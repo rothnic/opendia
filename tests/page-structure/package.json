@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "test": "node page-structure.test.js",
-    "test:format": "node format-comparison.test.js"
+    "test:format": "node format-comparison.test.js",
+    "test:modes": "node modes.test.js"
   },
   "devDependencies": {
     "playwright": "^1.40.0",

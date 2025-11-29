@@ -303,6 +303,9 @@ class BrowserAutomation {
         case "page_structure":
           result = await this.getPageStructure(data);
           break;
+        case "page_structure_extract":
+          result = await this.extractFromElement(data);
+          break;
         case "ping":
           // Health check for background tab content script readiness
           result = { status: "ready", timestamp: Date.now(), url: window.location.href };
@@ -3011,11 +3014,11 @@ class BrowserAutomation {
       maxNodes: data.max_nodes || 400,
       maxChildrenPerGroup: data.max_children_per_group || 6,
       examplesPerGroup: data.examples_per_group || 3,
+      mode: data.mode || 'overview', // 'overview', 'navigation', 'scraping', 'toon'
       format: data.format || 'compact' // 'compact' or 'json'
     };
 
-    console.log("🏗️ Building page structure outline", options);
-    const outline = this.buildPageOutline(options);
+    console.log("🏗️ Building page structure", options);
 
     const stats = {
       url: window.location.href,
@@ -3026,22 +3029,450 @@ class BrowserAutomation {
       }
     };
 
-    // Return compact text format by default (much more efficient)
+    // Build outline based on mode
+    let outline, modeSpecificData;
+
+    if (options.mode === 'navigation') {
+      ({ outline, modeData: modeSpecificData } = this.buildNavigationOutline(options));
+    } else if (options.mode === 'scraping') {
+      ({ outline, modeData: modeSpecificData } = this.buildScrapingOutline(options));
+    } else if (options.mode === 'toon') {
+      return this.buildToonOutline(stats);
+    } else {
+      // Default overview mode
+      outline = this.buildPageOutline(options);
+    }
+
+    // Store element registry for later extraction
+    if (!window.__opendiaElementRegistry) {
+      window.__opendiaElementRegistry = new Map();
+    }
+
+    // Return based on format
     if (options.format === 'compact') {
-      const compactText = this.formatAsCompactText(outline, stats);
+      const text = this.formatModeAsCompact(outline, stats, options.mode, modeSpecificData);
       return {
+        mode: options.mode,
         format: 'compact',
-        text: compactText,
-        stats
+        text,
+        stats,
+        ...(modeSpecificData || {})
       };
     }
 
-    // Legacy JSON format
     return {
+      mode: options.mode,
       format: 'json',
       outline,
-      stats
+      stats,
+      ...(modeSpecificData || {})
     };
+  }
+
+  // NAVIGATION MODE: Focus on interactive elements and viewport visibility
+  buildNavigationOutline(options) {
+    // Initialize registry
+    if (!window.__opendiaElementRegistry) {
+      window.__opendiaElementRegistry = new Map();
+    }
+
+    const interactiveElements = [];
+    const viewportHeight = window.innerHeight;
+    let elementId = 0;
+
+    const processElement = (el, depth = 0) => {
+      if (depth > options.maxDepth) return;
+
+      const isInteractive = this.isInteractiveElementForOutline(el);
+      const isVisible = this.isElementVisibleForOutline(el);
+
+      if (isInteractive && isVisible) {
+        const rect = el.getBoundingClientRect();
+        const inViewport = rect.top >= 0 && rect.top <= viewportHeight;
+        const id = `nav-${elementId++}`;
+
+        // Store in registry
+        window.__opendiaElementRegistry.set(id, el);
+
+        interactiveElements.push({
+          id,
+          tag: el.tagName.toLowerCase(),
+          type: el.type || null,
+          role: el.getAttribute('role'),
+          text: this.getVisibleTextForOutline(el, 100),
+          label: this.getElementLabelForOutline(el, ''),
+          href: el.href || null,
+          inViewport,
+          position: {
+            x: Math.round(rect.x),
+            y: Math.round(rect.y),
+            scrollY: Math.round(window.scrollY + rect.top)
+          },
+          classes: Array.from(el.classList).slice(0, 3),
+          elementId: el.id || null
+        });
+      }
+
+      // Recurse through children
+      Array.from(el.children).forEach(child => processElement(child, depth + 1));
+    };
+
+    processElement(document.body);
+
+    const modeData = {
+      totalInteractive: interactiveElements.length,
+      inViewport: interactiveElements.filter(e => e.inViewport).length,
+      belowFold: interactiveElements.filter(e => !e.inViewport).length
+    };
+
+    return {
+      outline: { elements: interactiveElements },
+      modeData
+    };
+  }
+
+  // SCRAPING MODE: Focus on repeated patterns and data structure
+  buildScrapingOutline(options) {
+    // Initialize registry
+    if (!window.__opendiaElementRegistry) {
+      window.__opendiaElementRegistry = new Map();
+    }
+
+    const outline = this.buildPageOutline(options);
+    const repeatedGroups = [];
+    let groupId = 0;
+
+    const findGroups = (node) => {
+      if (!node) return;
+
+      if (node.kind === 'repeated_group') {
+        const id = `group-${groupId++}`;
+
+        // Store all elements in this group
+        const signature = node.signature;
+        const elements = Array.from(document.querySelectorAll(
+          this.buildSelectorFromSignature(signature)
+        ));
+
+        window.__opendiaElementRegistry.set(id, elements);
+
+        repeatedGroups.push({
+          id,
+          signature,
+          total: node.total,
+          pattern: this.analyzeGroupPattern(node.examples[0]),
+          exampleData: this.extractExampleData(node.examples[0])
+        });
+
+        node.examples.forEach(ex => findGroups(ex));
+      } else if (node.children) {
+        node.children.forEach(child => findGroups(child));
+      }
+    };
+
+    findGroups(outline);
+
+    const modeData = {
+      repeatedGroups,
+      totalGroups: repeatedGroups.length,
+      scrapablePatterns: repeatedGroups.length
+    };
+
+    return { outline, modeData };
+  }
+
+  // TOON MODE: Ultra-compact representation
+  buildToonOutline(stats) {
+    // Initialize registry
+    if (!window.__opendiaElementRegistry) {
+      window.__opendiaElementRegistry = new Map();
+    }
+
+    const lines = [];
+    lines.push(`# ${stats.title}`);
+    lines.push(`URL: ${stats.url}`);
+    lines.push('');
+
+    let elementId = 0;
+    const processElement = (el, depth = 0) => {
+      if (depth > 6) return;
+
+      const isVisible = this.isElementVisibleForOutline(el);
+      if (!isVisible) return;
+
+      const tag = el.tagName.toLowerCase();
+      const id = `t${elementId++}`;
+      window.__opendiaElementRegistry.set(id, el);
+
+      const indent = '│ '.repeat(depth);
+      const interactive = this.isInteractiveElementForOutline(el) ? '🔵' : '';
+      const landmark = this.isLandmarkForOutline(el) ? '⭐' : '';
+
+      let desc = `${indent}${id}:${tag}`;
+      if (el.id) desc += `#${el.id}`;
+      if (el.classList.length) desc += `.${Array.from(el.classList).slice(0, 2).join('.')}`;
+      desc += ` ${interactive}${landmark}`;
+
+      const text = this.getVisibleTextForOutline(el, 40);
+      if (text) desc += ` "${text}"`;
+
+      lines.push(desc);
+
+      Array.from(el.children).slice(0, 10).forEach(child =>
+        processElement(child, depth + 1)
+      );
+    };
+
+    processElement(document.body);
+
+    return {
+      mode: 'toon',
+      format: 'toon',
+      text: lines.join('\n'),
+      stats,
+      totalElements: elementId
+    };
+  }
+
+  formatModeAsCompact(outline, stats, mode, modeData) {
+    const lines = [];
+    lines.push(`=== PAGE STRUCTURE (${mode.toUpperCase()} MODE) ===`);
+    lines.push(`Title: ${stats.title}`);
+    lines.push(`URL: ${stats.url}`);
+    lines.push(`Viewport: ${stats.viewport.width}x${stats.viewport.height}`);
+    lines.push('');
+
+    if (mode === 'navigation') {
+      lines.push(`📍 INTERACTIVE ELEMENTS: ${modeData.totalInteractive} total`);
+      lines.push(`   In viewport: ${modeData.inViewport}`);
+      lines.push(`   Below fold: ${modeData.belowFold}`);
+      lines.push('');
+
+      const elements = outline.elements;
+
+      // Group by viewport status
+      const inView = elements.filter(e => e.inViewport);
+      const belowView = elements.filter(e => !e.inViewport);
+
+      if (inView.length > 0) {
+        lines.push('🔵 IN VIEWPORT:');
+        inView.forEach(e => {
+          lines.push(`  [${e.id}] ${e.tag}${e.elementId ? '#' + e.elementId : ''}${e.classes.length ? '.' + e.classes.join('.') : ''}`);
+          lines.push(`        ${e.text || e.label || e.href || '(no text)'}`);
+          lines.push(`        Position: (${e.position.x}, ${e.position.y})`);
+        });
+        lines.push('');
+      }
+
+      if (belowView.length > 0 && belowView.length <= 10) {
+        lines.push('📍 BELOW VIEWPORT:');
+        belowView.forEach(e => {
+          lines.push(`  [${e.id}] ${e.tag} - ${e.text || e.label || '(no text)'}`);
+        });
+      } else if (belowView.length > 10) {
+        lines.push(`📍 ${belowView.length} more interactive elements below viewport (use scrolling)`);
+      }
+
+    } else if (mode === 'scraping') {
+      lines.push(`🗂️  REPEATED GROUPS: ${modeData.totalGroups} patterns found`);
+      lines.push('');
+
+      modeData.repeatedGroups.forEach((group, idx) => {
+        lines.push(`[${group.id}] Group ${idx + 1}: ${group.total} similar elements`);
+        lines.push(`    Signature: ${group.signature}`);
+        lines.push(`    Pattern: ${JSON.stringify(group.pattern)}`);
+        lines.push(`    Example data: ${JSON.stringify(group.exampleData).substring(0, 150)}...`);
+        lines.push('');
+      });
+
+      lines.push('💡 Use page_structure_extract with group ID to get all elements');
+
+    } else {
+      // Overview mode - use existing format
+      return this.formatAsCompactText(outline, stats);
+    }
+
+    return lines.join('\n');
+  }
+
+  analyzeGroupPattern(node) {
+    if (!node) return {};
+
+    const pattern = {
+      tag: node.tag,
+      hasImage: false,
+      hasLink: false,
+      hasText: !!node.textPreview,
+      childCount: node.children?.length || 0
+    };
+
+    const checkChildren = (n) => {
+      if (n.tag === 'img') pattern.hasImage = true;
+      if (n.tag === 'a') pattern.hasLink = true;
+      n.children?.forEach(checkChildren);
+    };
+
+    checkChildren(node);
+    return pattern;
+  }
+
+  extractExampleData(node) {
+    if (!node) return {};
+
+    const data = {};
+    if (node.textPreview) data.text = node.textPreview.substring(0, 100);
+    if (node.attributes?.href) data.href = node.attributes.href;
+
+    // Extract data from children
+    const extractFromChildren = (n, prefix = '') => {
+      if (n.textPreview && n.textPreview.length < 100) {
+        data[prefix + n.tag] = n.textPreview;
+      }
+      if (n.attributes?.href) {
+        data[prefix + 'link'] = n.attributes.href;
+      }
+      n.children?.slice(0, 3).forEach((child, idx) =>
+        extractFromChildren(child, `child${idx}_`)
+      );
+    };
+
+    extractFromChildren(node);
+    return data;
+  }
+
+  buildSelectorFromSignature(signature) {
+    // This is a simple heuristic - in practice would need more sophisticated matching
+    const parts = signature.split('|');
+    if (parts[2]) {
+      return `.${parts[2].split('.')[0]}`; // First class
+    }
+    return parts[0]; // Tag name
+  }
+
+  // EXTRACT CONTENT FROM ELEMENT BY ID
+  async extractFromElement(data) {
+    const elementId = data.element_id;
+    const extractFormat = data.format || 'text'; // 'text', 'html', 'markdown', 'json'
+    const includeChildren = data.include_children !== false;
+
+    if (!window.__opendiaElementRegistry) {
+      throw new Error('No element registry found. Run page_structure first.');
+    }
+
+    const element = window.__opendiaElementRegistry.get(elementId);
+    if (!element) {
+      throw new Error(`Element with ID "${elementId}" not found in registry`);
+    }
+
+    // Handle array of elements (from groups)
+    if (Array.isArray(element)) {
+      const results = element.map((el, idx) => ({
+        index: idx,
+        ...this.extractSingleElement(el, extractFormat, includeChildren)
+      }));
+
+      return {
+        elementId,
+        isGroup: true,
+        count: results.length,
+        items: results
+      };
+    }
+
+    // Single element
+    return {
+      elementId,
+      isGroup: false,
+      ...this.extractSingleElement(element, extractFormat, includeChildren)
+    };
+  }
+
+  extractSingleElement(element, format, includeChildren) {
+    if (format === 'html') {
+      return {
+        format: 'html',
+        content: element.outerHTML
+      };
+    }
+
+    if (format === 'markdown') {
+      return {
+        format: 'markdown',
+        content: this.htmlToMarkdown(element)
+      };
+    }
+
+    if (format === 'json') {
+      return {
+        format: 'json',
+        content: this.elementToJSON(element, includeChildren)
+      };
+    }
+
+    // Default text format
+    return {
+      format: 'text',
+      content: element.innerText || element.textContent || ''
+    };
+  }
+
+  htmlToMarkdown(element) {
+    const tag = element.tagName.toLowerCase();
+    const text = element.innerText || element.textContent || '';
+
+    // Simple markdown conversion
+    if (tag === 'h1') return `# ${text}\n`;
+    if (tag === 'h2') return `## ${text}\n`;
+    if (tag === 'h3') return `### ${text}\n`;
+    if (tag === 'h4') return `#### ${text}\n`;
+    if (tag === 'h5') return `##### ${text}\n`;
+    if (tag === 'h6') return `###### ${text}\n`;
+    if (tag === 'a') return `[${text}](${element.href || '#'})`;
+    if (tag === 'strong' || tag === 'b') return `**${text}**`;
+    if (tag === 'em' || tag === 'i') return `*${text}*`;
+    if (tag === 'code') return `\`${text}\``;
+    if (tag === 'li') return `- ${text}\n`;
+    if (tag === 'p') return `${text}\n`;
+
+    // For complex elements, recursively convert children
+    let md = '';
+    Array.from(element.children).forEach(child => {
+      md += this.htmlToMarkdown(child);
+    });
+
+    return md || text;
+  }
+
+  elementToJSON(element, includeChildren = true) {
+    const obj = {
+      tag: element.tagName.toLowerCase(),
+      text: element.innerText || element.textContent || '',
+      attributes: {}
+    };
+
+    // Add significant attributes
+    if (element.id) obj.attributes.id = element.id;
+    if (element.className) obj.attributes.class = element.className;
+    if (element.href) obj.attributes.href = element.href;
+    if (element.src) obj.attributes.src = element.src;
+    if (element.alt) obj.attributes.alt = element.alt;
+    if (element.type) obj.attributes.type = element.type;
+    if (element.value) obj.attributes.value = element.value;
+
+    // Extract data attributes
+    Array.from(element.attributes).forEach(attr => {
+      if (attr.name.startsWith('data-')) {
+        obj.attributes[attr.name] = attr.value;
+      }
+    });
+
+    if (includeChildren && element.children.length > 0) {
+      obj.children = Array.from(element.children).map(child =>
+        this.elementToJSON(child, true)
+      );
+    }
+
+    return obj;
   }
 
   formatAsCompactText(node, stats, depth = 0) {

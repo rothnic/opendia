@@ -3010,23 +3010,122 @@ class BrowserAutomation {
       maxDepth: data.max_depth || 8,
       maxNodes: data.max_nodes || 400,
       maxChildrenPerGroup: data.max_children_per_group || 6,
-      examplesPerGroup: data.examples_per_group || 3
+      examplesPerGroup: data.examples_per_group || 3,
+      format: data.format || 'compact' // 'compact' or 'json'
     };
 
     console.log("🏗️ Building page structure outline", options);
     const outline = this.buildPageOutline(options);
 
-    return {
-      outline,
-      stats: {
-        url: window.location.href,
-        title: document.title,
-        viewport: {
-          width: window.innerWidth,
-          height: window.innerHeight
-        }
+    const stats = {
+      url: window.location.href,
+      title: document.title,
+      viewport: {
+        width: window.innerWidth,
+        height: window.innerHeight
       }
     };
+
+    // Return compact text format by default (much more efficient)
+    if (options.format === 'compact') {
+      const compactText = this.formatAsCompactText(outline, stats);
+      return {
+        format: 'compact',
+        text: compactText,
+        stats
+      };
+    }
+
+    // Legacy JSON format
+    return {
+      format: 'json',
+      outline,
+      stats
+    };
+  }
+
+  formatAsCompactText(node, stats, depth = 0) {
+    if (!node) return '';
+
+    const indent = '  '.repeat(depth);
+    const lines = [];
+
+    // Add header with stats
+    if (depth === 0) {
+      lines.push(`PAGE STRUCTURE: ${stats.title}`);
+      lines.push(`URL: ${stats.url}`);
+      lines.push(`Viewport: ${stats.viewport.width}x${stats.viewport.height}`);
+      lines.push('');
+    }
+
+    // Handle repeated groups
+    if (node.kind === 'repeated_group') {
+      lines.push(`${indent}[GROUP] ${node.total} similar elements (showing ${node.shown}, omitting ${node.omitted})`);
+      lines.push(`${indent}  Signature: ${node.signature}`);
+
+      // Show examples
+      node.examples.forEach((example, idx) => {
+        lines.push(`${indent}  Example ${idx + 1}:`);
+        lines.push(this.formatAsCompactText(example, stats, depth + 2));
+      });
+
+      return lines.join('\n');
+    }
+
+    // Build node description
+    const parts = [node.tag];
+
+    // Add ID and classes
+    if (node.attributes?.id) parts.push(`#${node.attributes.id}`);
+    if (node.attributes?.classes?.length) {
+      parts.push(`.${node.attributes.classes.join('.')}`);
+    }
+
+    // Add flags
+    const flags = [];
+    if (node.interactive) flags.push('interactive');
+    if (node.landmark) flags.push('landmark');
+    if (node.role) flags.push(`role=${node.role}`);
+    if (flags.length) parts.push(`[${flags.join(', ')}]`);
+
+    // Add bounding box (compact format)
+    if (node.bbox) {
+      const { x, y, width, height } = node.bbox;
+      parts.push(`[${Math.round(x)},${Math.round(y)} ${Math.round(width)}x${Math.round(height)}]`);
+    }
+
+    // Add label or text preview
+    if (node.label) {
+      parts.push(`"${node.label}"`);
+    } else if (node.textPreview && node.textPreview.length < 50) {
+      parts.push(`"${node.textPreview}"`);
+    }
+
+    // Add href for links
+    if (node.attributes?.href) {
+      parts.push(`→ ${node.attributes.href}`);
+    }
+
+    // Add input type
+    if (node.attributes?.type) {
+      parts.push(`type=${node.attributes.type}`);
+    }
+
+    lines.push(`${indent}${parts.join(' ')}`);
+
+    // Add children
+    if (node.children?.length) {
+      node.children.forEach(child => {
+        lines.push(this.formatAsCompactText(child, stats, depth + 1));
+      });
+    }
+
+    // Add truncation notice
+    if (node.truncated) {
+      lines.push(`${indent}  [... truncated]`);
+    }
+
+    return lines.join('\n');
   }
 
   buildPageOutline(options) {

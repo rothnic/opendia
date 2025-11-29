@@ -4,7 +4,8 @@
   "description": "E2E test for OpenDia page_structure tool",
   "type": "module",
   "scripts": {
-    "test": "node page-structure.test.js"
+    "test": "node page-structure.test.js",
+    "test:format": "node format-comparison.test.js"
   },
   "devDependencies": {
     "playwright": "^1.40.0",

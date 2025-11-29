@@ -166,6 +166,8 @@ class TestRunner {
   }
 
   async callPageStructure(options = {}) {
+    // Request JSON format explicitly for testing
+    const args = { format: 'json', ...options };
     const requestId = Date.now();
     const payload = {
       jsonrpc: '2.0',
@@ -173,7 +175,7 @@ class TestRunner {
       method: 'tools/call',
       params: {
         name: 'page_structure',
-        arguments: options
+        arguments: args
       }
     };
 

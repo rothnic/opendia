@@ -1609,10 +1609,16 @@ function getFallbackTools() {
     {
       name: 'page_structure',
       description:
-        '🏗️ BUILD PAGE OUTLINE: Creates a hierarchical structural outline of the current page with intelligent grouping of repeated elements. Returns a tree with bounding boxes, interactive elements, landmarks, and text previews. Perfect for understanding complex page layouts.',
+        '🏗️ BUILD PAGE OUTLINE: Creates a hierarchical structural outline of the current page with intelligent grouping of repeated elements. Returns a tree with bounding boxes, interactive elements, landmarks, and text previews. Perfect for understanding complex page layouts. Default format is compact text (much more efficient than JSON).',
       inputSchema: {
         type: 'object',
         properties: {
+          format: {
+            type: 'string',
+            enum: ['compact', 'json'],
+            default: 'compact',
+            description: 'Output format: "compact" (efficient text tree) or "json" (full nested structure)'
+          },
           max_depth: {
             type: 'number',
             default: 8,

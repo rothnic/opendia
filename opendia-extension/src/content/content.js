@@ -3051,14 +3051,17 @@ class BrowserAutomation {
     // Return based on format
     if (options.format === 'compact') {
       const text = this.formatAsComprehensiveText(result, options);
-      return {
+      const response = {
         format: 'compact',
         text,
         metadata,
         groupsCount: groups.length
       };
+      console.log("🏗️ getPageStructure returning compact:", response);
+      return response;
     }
 
+    console.log("🏗️ getPageStructure returning json:", result);
     return {
       format: 'json',
       ...result

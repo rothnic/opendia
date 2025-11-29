@@ -68,6 +68,8 @@ async function analyzeCurrentPage() {
       }
     });
 
+    console.log('📥 Sidepanel received response:', response);
+
     if (response.error) {
       throw new Error(response.error);
     }

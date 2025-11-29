@@ -1,0 +1,13 @@
+{
+  "name": "page-structure-test",
+  "version": "1.0.0",
+  "description": "E2E test for OpenDia page_structure tool",
+  "type": "module",
+  "scripts": {
+    "test": "node page-structure.test.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.40.0",
+    "ws": "^8.18.0"
+  }
+}

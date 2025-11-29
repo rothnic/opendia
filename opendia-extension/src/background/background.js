@@ -1207,6 +1207,40 @@ function getAvailableTools() {
           }
         }
       }
+    },
+    {
+      name: 'page_structure',
+      description:
+        '🏗️ BUILD PAGE OUTLINE: Creates a hierarchical structural outline of the current page with intelligent grouping of repeated elements. Returns a tree with bounding boxes, interactive elements, landmarks, and text previews. Perfect for understanding complex page layouts.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          max_depth: {
+            type: 'number',
+            default: 8,
+            description: 'Maximum depth to traverse the DOM tree'
+          },
+          max_nodes: {
+            type: 'number',
+            default: 400,
+            description: 'Maximum number of nodes to include in the outline'
+          },
+          max_children_per_group: {
+            type: 'number',
+            default: 6,
+            description: 'Maximum siblings before grouping them'
+          },
+          examples_per_group: {
+            type: 'number',
+            default: 3,
+            description: 'Number of example nodes to show for grouped elements'
+          },
+          tab_id: {
+            type: 'number',
+            description: 'Target tab ID (defaults to active tab)'
+          }
+        }
+      }
     }
   ];
 }
@@ -1301,6 +1335,9 @@ async function handleMCPRequest(message) {
         break;
       case 'select_element':
         result = await sendToContentScript('select_element', params, params.tab_id);
+        break;
+      case 'page_structure':
+        result = await sendToContentScript('page_structure', params, params.tab_id);
         break;
       default:
         throw new Error(`Unknown method: ${method}`);

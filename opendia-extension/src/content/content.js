@@ -300,6 +300,9 @@ class BrowserAutomation {
         case "select_element":
           result = await this.selectElement(data);
           break;
+        case "page_structure":
+          result = await this.getPageStructure(data);
+          break;
         case "ping":
           // Health check for background tab content script readiness
           result = { status: "ready", timestamp: Date.now(), url: window.location.href };
@@ -2999,6 +3002,345 @@ class BrowserAutomation {
       el = el.parentNode;
     }
     return path.join(" > ");
+  }
+
+  // 🏗️ PAGE STRUCTURE OUTLINE TOOL
+  async getPageStructure(data) {
+    const options = {
+      maxDepth: data.max_depth || 8,
+      maxNodes: data.max_nodes || 400,
+      maxChildrenPerGroup: data.max_children_per_group || 6,
+      examplesPerGroup: data.examples_per_group || 3
+    };
+
+    console.log("🏗️ Building page structure outline", options);
+    const outline = this.buildPageOutline(options);
+
+    return {
+      outline,
+      stats: {
+        url: window.location.href,
+        title: document.title,
+        viewport: {
+          width: window.innerWidth,
+          height: window.innerHeight
+        }
+      }
+    };
+  }
+
+  buildPageOutline(options) {
+    // Start from body to capture all landmarks (header, nav, footer, etc.)
+    const root = document.body || document.documentElement;
+    if (!root) return null;
+
+    const viewportArea = window.innerWidth * window.innerHeight || 1;
+    const budget = { remaining: options.maxNodes };
+
+    return this.summarizeElement(root, 0, "root", budget, options, viewportArea);
+  }
+
+  summarizeElement(el, depth, id, budget, options, viewportArea) {
+    if (budget.remaining <= 0) return null;
+
+    const bbox = this.getBBoxForOutline(el, viewportArea);
+    const interactive = this.isInteractiveElementForOutline(el);
+    const landmark = this.isLandmarkForOutline(el);
+    const role = this.getRoleForOutline(el);
+    const textPreview = this.getVisibleTextForOutline(el, 160);
+    const label = this.getElementLabelForOutline(el, textPreview);
+    const attrs = this.collectUsefulAttributesForOutline(el);
+
+    const baseNode = {
+      kind: "node",
+      id,
+      tag: el.tagName.toLowerCase(),
+      role,
+      interactive,
+      landmark,
+      bbox,
+      label,
+      textPreview,
+      attributes: attrs,
+      children: []
+    };
+
+    budget.remaining -= 1;
+    if (budget.remaining <= 0) {
+      baseNode.truncated = true;
+      return baseNode;
+    }
+
+    if (depth >= options.maxDepth && !interactive && !landmark) {
+      baseNode.truncated = true;
+      return baseNode;
+    }
+
+    const children = this.summarizeChildren(el, depth, id, budget, options, viewportArea);
+    baseNode.children = children;
+    return baseNode;
+  }
+
+  summarizeChildren(parent, depth, parentId, budget, options, viewportArea) {
+    if (budget.remaining <= 0) return [];
+
+    const rawChildren = Array.from(parent.children);
+    const visibleChildren = rawChildren.filter(el => this.isElementVisibleForOutline(el));
+
+    const childrenInfo = visibleChildren.map((el, index) => {
+      const bbox = this.getBBoxForOutline(el, viewportArea);
+      const interactive = this.isInteractiveElementForOutline(el);
+      const landmark = this.isLandmarkForOutline(el);
+      const text = this.getVisibleTextForOutline(el, 240);
+      const textLen = text.length;
+      const areaBucket = this.getAreaBucket(bbox.viewportAreaRatio);
+      const score = this.getImportanceScore(bbox, interactive, landmark, textLen);
+      return { el, index, bbox, interactive, landmark, textLen, score, areaBucket };
+    });
+
+    // Group by structural signature
+    const groupsMap = new Map();
+    for (const child of childrenInfo) {
+      const signature = this.getSignatureForOutline(child.el, child.areaBucket);
+      const group = groupsMap.get(signature);
+      if (group) {
+        group.members.push(child);
+      } else {
+        groupsMap.set(signature, { signature, members: [child] });
+      }
+    }
+
+    const groups = Array.from(groupsMap.values());
+
+    // Sort groups by max member importance
+    groups.sort((a, b) => {
+      const aMax = Math.max(...a.members.map(m => m.score));
+      const bMax = Math.max(...b.members.map(m => m.score));
+      return bMax - aMax;
+    });
+
+    const out = [];
+
+    for (let gIndex = 0; gIndex < groups.length; gIndex++) {
+      if (budget.remaining <= 0) break;
+
+      const group = groups[gIndex];
+      const members = group.members.sort((a, b) => b.score - a.score);
+
+      if (members.length <= options.maxChildrenPerGroup) {
+        // Keep all children as individual nodes
+        for (const m of members) {
+          if (budget.remaining <= 0) break;
+          const childId = this.makeChildIdForOutline(parentId, m.el, m.index);
+          const childNode = this.summarizeElement(m.el, depth + 1, childId, budget, options, viewportArea);
+          if (childNode) out.push(childNode);
+        }
+      } else {
+        // Collapse into repeated_group with examples
+        const examples = [];
+        const exampleCount = Math.min(options.examplesPerGroup, members.length);
+
+        for (let i = 0; i < exampleCount; i++) {
+          if (budget.remaining <= 0) break;
+          const m = members[i];
+          const exId = this.makeChildIdForOutline(parentId, m.el, m.index);
+          const exNode = this.summarizeElement(m.el, depth + 1, exId, budget, options, viewportArea);
+          if (exNode) examples.push(exNode);
+        }
+
+        const groupNode = {
+          kind: "repeated_group",
+          id: `${parentId}/group[${gIndex + 1}]`,
+          signature: group.signature,
+          total: members.length,
+          shown: examples.length,
+          omitted: members.length - examples.length,
+          examples
+        };
+
+        budget.remaining -= 1;
+        if (budget.remaining < 0) break;
+        out.push(groupNode);
+      }
+    }
+
+    return out;
+  }
+
+  isElementVisibleForOutline(el) {
+    if (!(el instanceof HTMLElement)) return false;
+    const style = window.getComputedStyle(el);
+    if (style.display === "none" || style.visibility === "hidden") return false;
+    const rect = el.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false;
+    if (rect.bottom < 0 || rect.top > window.innerHeight * 3) return false;
+    return true;
+  }
+
+  getBBoxForOutline(el, viewportArea) {
+    const rect = el.getBoundingClientRect();
+    const area = Math.max(0, rect.width * rect.height);
+    return {
+      x: Math.round(rect.x),
+      y: Math.round(rect.y),
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+      area: Math.round(area),
+      viewportAreaRatio: viewportArea ? area / viewportArea : 0
+    };
+  }
+
+  getImportanceScore(bbox, interactive, landmark, textLen) {
+    const areaScore = Math.log(1 + bbox.viewportAreaRatio * 1000);
+    const interScore = interactive ? 4 : 0;
+    const landScore = landmark ? 3 : 0;
+    const textScore = Math.log(1 + textLen);
+    return 3 * areaScore + interScore + landScore + textScore;
+  }
+
+  getAreaBucket(ratio) {
+    if (ratio > 0.5) return "XL";
+    if (ratio > 0.2) return "L";
+    if (ratio > 0.05) return "M";
+    if (ratio > 0.01) return "S";
+    return "XS";
+  }
+
+  isInteractiveElementForOutline(el) {
+    const tag = el.tagName.toLowerCase();
+    const role = this.getRoleForOutline(el);
+    const hasClick = typeof el.onclick === "function";
+
+    if (["a", "button", "input", "select", "textarea", "summary"].includes(tag)) {
+      return true;
+    }
+
+    if (["button", "link", "checkbox", "radio", "tab", "menuitem", "textbox", "combobox", "slider", "switch"].includes(role)) {
+      return true;
+    }
+
+    if (el.tabIndex >= 0) return true;
+    if (hasClick) return true;
+
+    const style = window.getComputedStyle(el);
+    if (style.cursor === "pointer") return true;
+
+    return false;
+  }
+
+  isLandmarkForOutline(el) {
+    const tag = el.tagName.toLowerCase();
+    const role = this.getRoleForOutline(el);
+
+    if (["header", "nav", "main", "aside", "footer"].includes(tag)) {
+      return true;
+    }
+
+    if (["banner", "navigation", "main", "complementary", "contentinfo", "region"].includes(role)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  getRoleForOutline(el) {
+    return el.getAttribute("role") || null;
+  }
+
+  getVisibleTextForOutline(el, maxLen) {
+    let text = "";
+    if (el instanceof HTMLElement) {
+      text = el.innerText || "";
+    } else {
+      text = el.textContent || "";
+    }
+    const normalized = text.replace(/\s+/g, " ").trim();
+    if (!normalized) return "";
+    if (normalized.length > maxLen) {
+      return normalized.slice(0, maxLen) + "…";
+    }
+    return normalized;
+  }
+
+  getElementLabelForOutline(el, textPreview) {
+    const aria = el.getAttribute("aria-label");
+    if (aria && aria.trim()) return aria.trim();
+
+    const title = el.getAttribute("title");
+    if (title && title.trim()) return title.trim();
+
+    if (el instanceof HTMLImageElement) {
+      const alt = el.alt;
+      if (alt && alt.trim()) return alt.trim();
+    }
+
+    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) {
+      const placeholder = el.getAttribute("placeholder");
+      if (placeholder && placeholder.trim()) return placeholder.trim();
+    }
+
+    return textPreview || undefined;
+  }
+
+  collectUsefulAttributesForOutline(el) {
+    const attrs = {};
+    const id = el.getAttribute("id");
+    if (id) attrs.id = id;
+
+    if (el.classList && el.classList.length) {
+      const classes = Array.from(el.classList).slice(0, 3);
+      if (classes.length) attrs.classes = classes;
+    }
+
+    if (el instanceof HTMLAnchorElement && el.href) {
+      attrs.href = this.simplifyUrlForOutline(el.href);
+    }
+
+    if (el instanceof HTMLInputElement) {
+      if (el.type) attrs.type = el.type;
+      if (el.name) attrs.name = el.name;
+    }
+
+    if (el instanceof HTMLButtonElement) {
+      if (el.type) attrs.type = el.type;
+      if (el.name) attrs.name = el.name;
+    }
+
+    return attrs;
+  }
+
+  simplifyUrlForOutline(url) {
+    try {
+      const u = new URL(url, location.href);
+      const pathParts = u.pathname.split("/").filter(Boolean);
+      let pathSummary = "";
+      if (pathParts.length > 2) {
+        pathSummary = `/${pathParts[0]}/…/${pathParts[pathParts.length - 1]}`;
+      } else if (pathParts.length > 0) {
+        pathSummary = `/${pathParts.join("/")}`;
+      }
+      const queryHint = u.search ? " ?…" : "";
+      return `${u.origin}${pathSummary}${queryHint}`;
+    } catch {
+      if (url.length > 80) return url.slice(0, 80) + "…";
+      return url;
+    }
+  }
+
+  getSignatureForOutline(el, areaBucket) {
+    const tag = el.tagName.toLowerCase();
+    const role = this.getRoleForOutline(el) || "";
+    const classes = el.classList ? Array.from(el.classList).slice(0, 3).sort().join(".") : "";
+    const hasImg = !!el.querySelector("img,picture,svg");
+    const hasLink = !!el.querySelector("a,button,[role='button']");
+    const hasInput = !!el.querySelector("input,select,textarea");
+    return [tag, role, classes, areaBucket, hasImg ? "img" : "", hasLink ? "link" : "", hasInput ? "input" : ""].join("|");
+  }
+
+  makeChildIdForOutline(parentId, el, index) {
+    const tag = el.tagName.toLowerCase();
+    const position = index + 1;
+    return `${parentId}/${tag}[${position}]`;
   }
 }
 

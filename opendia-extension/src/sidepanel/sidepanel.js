@@ -75,7 +75,7 @@ async function analyzeCurrentPage() {
     }
 
     // Display the result
-    displayStructure(response.result);
+    displayStructure(response.data);
 
   } catch (error) {
     console.error('Error analyzing page:', error);

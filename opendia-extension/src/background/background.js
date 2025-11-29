@@ -121,7 +121,7 @@ class ConnectionManager {
 
   async discoverServerPorts() {
     // Try common HTTP ports to find the server
-    const commonPorts = [5556, 5557, 5558, 3001, 6001, 6002, 6003];
+    const commonPorts = [5556, 5557, 5558, 3001, 5101, 6001, 6002, 6003];
 
     for (const httpPort of commonPorts) {
       try {

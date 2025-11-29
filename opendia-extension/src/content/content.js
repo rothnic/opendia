@@ -3367,9 +3367,9 @@ class BrowserAutomation {
     if (node.kind === 'repeated_group') {
       parts.push(`[GROUP: ${node.total} items]`);
     } else if (node.label) {
-      parts.push(`"${node.label}"`);
+      parts.push(`"${node.label.substring(0, 30)}${node.label.length > 30 ? '...' : ''}"`);
     } else if (node.textPreview) {
-      parts.push(`"${node.textPreview.substring(0, 50)}..."`);
+      parts.push(`"${node.textPreview.substring(0, 30)}${node.textPreview.length > 30 ? '...' : ''}"`);
     }
 
     // Attributes

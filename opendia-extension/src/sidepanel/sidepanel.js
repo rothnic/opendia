@@ -58,13 +58,18 @@ async function analyzeCurrentPage() {
 
     currentTabId = tab.id;
 
+    // Get user-selected options
+    const format = document.getElementById('format-select').value;
+    const maxDepth = parseInt(document.getElementById('max-depth').value) || 6;
+    const maxNodes = parseInt(document.getElementById('max-nodes').value) || 200;
+
     // Send message to content script to get page structure
     const response = await chrome.tabs.sendMessage(tab.id, {
       action: 'page_structure',
       data: {
-        format: 'compact',
-        max_depth: 8,
-        max_nodes: 400
+        format: format,
+        max_depth: maxDepth,
+        max_nodes: maxNodes
       }
     });
 

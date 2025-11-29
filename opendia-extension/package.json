@@ -10,7 +10,7 @@
     "dev:firefox": "npm run build:firefox && web-ext run --source-dir=dist/firefox",
     "package:chrome": "npm run build:chrome && cd dist/chrome && zip -r ../opendia-chrome.zip .",
     "package:firefox": "npm run build:firefox && cd dist/firefox && web-ext build --overwrite-dest",
-    "debug": "npm run build:chrome && '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' --user-data-dir=$(pwd)/.chrome-debug-data --load-extension=$(pwd)/dist/chrome --auto-open-devtools-for-tabs"
+    "debug": "npm run build:chrome && node launch-debug.js"
   },
   "keywords": [
     "webextension",

@@ -3042,6 +3042,9 @@ class BrowserAutomation {
     const groups = [];
     this.extractGroupsAndSelectors(outline, groups);
 
+    // 4. Assign logical IDs
+    this.assignLogicalIds(outline);
+
     const result = {
       metadata,
       groups,
@@ -3313,6 +3316,68 @@ class BrowserAutomation {
     return schema;
   }
 
+  assignLogicalIds(node, prefix = '', counters = {}) {
+    if (!node) return;
+
+    // Root node
+    if (!prefix) {
+      node.logicalId = 'root';
+      prefix = 'root';
+    } else {
+      // Detect node type for appropriate prefix
+      const nodeType = this.detectLogicalNodeType(node);
+
+      if (!counters[nodeType]) counters[nodeType] = 0;
+      counters[nodeType]++;
+
+      // Generate logical ID
+      const typeCode = nodeType[0].toUpperCase();
+      node.logicalId = `${prefix === 'root' ? '' : prefix + '.'}${typeCode}${counters[nodeType]}`;
+    }
+
+    // Keep original path ID for retrieval
+    node.pathId = node.id;
+
+    // Recurse to children
+    if (node.kind === 'repeated_group' && node.examples) {
+      const childCounters = {};
+      node.examples.forEach(example => {
+        this.assignLogicalIds(example, node.logicalId, childCounters);
+      });
+    } else if (node.children) {
+      const childCounters = {};
+      node.children.forEach(child => {
+        this.assignLogicalIds(child, node.logicalId, childCounters);
+      });
+    }
+  }
+
+  detectLogicalNodeType(node) {
+    // Detect what kind of element this is for ID assignment
+    if (node.kind === 'repeated_group') return 'group';
+    if (node.landmark) {
+      if (node.tag === 'header') return 'header';
+      if (node.tag === 'nav') return 'nav';
+      if (node.tag === 'footer') return 'footer';
+      return 'section';
+    }
+    if (node.tag === 'nav') return 'nav';
+
+    const classes = (node.attributes?.classes || []).join(' ');
+
+    // Card/tile detection
+    if (/grid|col|card|tile|item/.test(classes)) return 'card';
+
+    // Section detection
+    if (/section|container|content/.test(classes)) return 'section';
+
+    // Interactive elements
+    if (node.interactive) return 'control';
+
+    // Default to element
+    return 'element';
+  }
+
   formatAsComprehensiveText(result, options) {
     const lines = [];
     const { metadata, groups, outline } = result;
@@ -3353,8 +3418,9 @@ class BrowserAutomation {
     const indent = '  '.repeat(depth);
     const parts = [];
 
-    // ID for targeting
-    parts.push(`@${node.id}`);
+    // Use logical ID for display (fallback to path ID if not assigned)
+    const displayId = node.logicalId || node.id;
+    parts.push(displayId);
 
     // Tag and classes
     let selector = node.tag;

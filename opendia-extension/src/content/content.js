@@ -3347,6 +3347,9 @@ class BrowserAutomation {
   formatToonTree(node, depth = 0) {
     if (!node) return '';
 
+    // Skip layout noise elements
+    if (this.shouldSkipInOutline(node)) return '';
+
     const indent = '  '.repeat(depth);
     const parts = [];
 
@@ -3379,20 +3382,57 @@ class BrowserAutomation {
     const line = `${indent}${parts.join(' ')}`;
     const lines = [line];
 
-    // Children
+    // Children - sort by Y position at top levels
+    let children = node.children || [];
     if (node.kind === 'repeated_group') {
       node.examples.forEach((ex, i) => {
         lines.push(`${indent}  Example ${i+1}:`);
         lines.push(this.formatToonTree(ex, depth + 2));
       });
-    } else if (node.children) {
-      node.children.forEach(child => {
-        lines.push(this.formatToonTree(child, depth + 1));
+    } else if (children.length > 0) {
+      // Sort children by Y position if we're at shallow depth
+      if (depth <= 2) {
+        children = this.sortByVisualPosition(children);
+      }
+
+      children.forEach(child => {
+        const childOutput = this.formatToonTree(child, depth + 1);
+        if (childOutput) lines.push(childOutput);
       });
     }
 
     return lines.join('\n');
   }
+
+  shouldSkipInOutline(node) {
+    // Skip pure layout elements
+    if (node.tag === 'hr') return true;
+    if (node.tag === 'br') return true;
+
+    // Skip pure spacing divs
+    const classes = (node.attributes?.classes || []).join(' ');
+    if (/spacer|separator|divider|break/.test(classes) && !node.interactive) return true;
+
+    // Skip if no text, no interaction, no meaningful children
+    if (!node.textPreview &&
+        !node.label &&
+        !node.interactive &&
+        (!node.children || node.children.length === 0)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  sortByVisualPosition(nodes) {
+    // Sort by Y coordinate for visual ordering
+    return nodes.slice().sort((a, b) => {
+      const aY = a.bbox?.y || 0;
+      const bY = b.bbox?.y || 0;
+      return aY - bY;
+    });
+  }
+
 
 
   isElementVisibleForOutline(el) {

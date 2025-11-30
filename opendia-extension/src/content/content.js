@@ -3706,7 +3706,12 @@ class BrowserAutomation {
     }
 
     // 2. Detect main content area
-    const main = document.querySelector('main, [role="main"], #main, .main-content');
+    let main = document.querySelector('main, [role="main"], #main, .main-content, #content, .content');
+    if (!main) {
+      // Fallback: find largest content container
+      main = document.body;
+    }
+
     if (main) {
       const mainSections = this.detectSectionsInContainer(main, regionId);
       regions.push(...mainSections);
@@ -3743,17 +3748,59 @@ class BrowserAutomation {
     const sections = [];
     let id = startId;
 
-    const children = Array.from(container.children);
+    // First, try to find card grids anywhere in the container
+    const cardGridContainers = this.findCardGridContainers(container);
 
-    for (const child of children) {
-      const rect = child.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) continue;
+    for (const gridContainer of cardGridContainers) {
+      const region = this.analyzeRegion(gridContainer, `R${++id}`, 'card_section');
+      if (region && region.card_grids && region.card_grids.length > 0) {
+        sections.push(region);
+      }
+    }
 
-      const region = this.analyzeRegion(child, `R${++id}`, this.inferRegionKind(child));
-      if (region) sections.push(region);
+    // If we didn't find card grids, analyze top-level children
+    if (sections.length === 0) {
+      const children = Array.from(container.children);
+      for (const child of children) {
+        const rect = child.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) continue;
+
+        const region = this.analyzeRegion(child, `R${++id}`, this.inferRegionKind(child));
+        if (region) sections.push(region);
+      }
     }
 
     return sections;
+  }
+
+  findCardGridContainers(root) {
+    const candidates = [];
+    const visited = new Set();
+
+    const traverse = (element) => {
+      if (visited.has(element)) return;
+      visited.add(element);
+
+      const children = Array.from(element.children);
+      if (children.length < 3) {
+        // Not enough children to be a grid, recurse deeper
+        children.forEach(traverse);
+        return;
+      }
+
+      // Check if children look like cards
+      const groups = this.findRepeatedItemCandidates(element);
+      if (groups.length > 0 && groups.some(g => g.items.length >= 3)) {
+        candidates.push(element);
+        return; // Don't recurse into detected grids
+      }
+
+      // No grid found, continue deeper
+      children.forEach(traverse);
+    };
+
+    traverse(root);
+    return candidates;
   }
 
   analyzeRegion(element, id, kind) {
@@ -3830,9 +3877,11 @@ class BrowserAutomation {
 
     for (const group of candidates) {
       if (group.items.length >= 3) {
+        const preview = this.extractCardPreview(group.items[0]);
         grids.push({
           type: group.type,
-          count: group.items.length
+          count: group.items.length,
+          preview: preview
         });
       }
     }
@@ -3953,6 +4002,9 @@ class BrowserAutomation {
         for (const grid of region.card_grids) {
           lines.push(`      - type: ${grid.type}`);
           lines.push(`        count: ${grid.count}`);
+          if (grid.preview && grid.preview.title) {
+            lines.push(`        example: "${grid.preview.title}"`);
+          }
         }
       }
 

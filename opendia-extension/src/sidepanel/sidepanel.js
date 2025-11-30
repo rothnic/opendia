@@ -107,12 +107,12 @@ function displayStructure(result) {
     return;
   }
 
-  // Handle both compact text format and JSON format
+  // Handle text-based formats (compact and regions)
   let text;
   let metadata;
   let groupsCount = 0;
 
-  if (result.format === 'compact' && result.text) {
+  if ((result.format === 'compact' || result.format === 'regions') && result.text) {
     text = result.text;
     metadata = result.metadata;
     groupsCount = result.groupsCount || 0;

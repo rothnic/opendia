@@ -260,6 +260,9 @@ class BrowserAutomation {
     try {
       let result;
       switch (action) {
+        case "ping":
+          result = { status: "ok", timestamp: Date.now() };
+          break;
         case "analyze":
           result = await this.analyzePage(data);
           break;
@@ -4171,6 +4174,11 @@ const THEME_PRESETS = {
 };
 
 // Initialize the automation system
-const browserAutomation = new BrowserAutomation();
+try {
+  const browserAutomation = new BrowserAutomation();
+  console.log("✅ OpenDia automation system initialized");
+} catch (e) {
+  console.error("❌ Failed to initialize OpenDia automation:", e);
+}
 
 } // End of injection guard

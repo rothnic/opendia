@@ -3748,24 +3748,22 @@ class BrowserAutomation {
     const sections = [];
     let id = startId;
 
-    // First, try to find card grids anywhere in the container
-    const cardGridContainers = this.findCardGridContainers(container);
+    // Analyze top-level children to preserve page structure
+    const children = Array.from(container.children);
 
-    for (const gridContainer of cardGridContainers) {
-      const region = this.analyzeRegion(gridContainer, `R${++id}`, 'card_section');
-      if (region && region.card_grids && region.card_grids.length > 0) {
-        sections.push(region);
-      }
+    for (const child of children) {
+      const rect = child.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) continue;
+
+      const region = this.analyzeRegion(child, `R${++id}`, this.inferRegionKind(child));
+      if (region) sections.push(region);
     }
 
-    // If we didn't find card grids, analyze top-level children
+    // If we found nothing (e.g. wrappers obscured content), try finding grids directly
     if (sections.length === 0) {
-      const children = Array.from(container.children);
-      for (const child of children) {
-        const rect = child.getBoundingClientRect();
-        if (rect.width === 0 || rect.height === 0) continue;
-
-        const region = this.analyzeRegion(child, `R${++id}`, this.inferRegionKind(child));
+      const gridContainers = this.findCardGridContainers(container);
+      for (const gridContainer of gridContainers) {
+        const region = this.analyzeRegion(gridContainer, `R${++id}`, 'card_section');
         if (region) sections.push(region);
       }
     }
@@ -3782,11 +3780,7 @@ class BrowserAutomation {
       visited.add(element);
 
       const children = Array.from(element.children);
-      if (children.length < 3) {
-        // Not enough children to be a grid, recurse deeper
-        children.forEach(traverse);
-        return;
-      }
+      if (children.length === 0) return;
 
       // Check if children look like cards
       const groups = this.findRepeatedItemCandidates(element);
@@ -3809,7 +3803,7 @@ class BrowserAutomation {
 
     const region = { id, kind };
 
-    const heading = element.querySelector('h1, h2, h3, h4');
+    const heading = element.querySelector('h1, h2, h3, h4, [class*="head"], [class*="title"]');
     if (heading) {
       region.title = heading.textContent.trim().substring(0, 80);
     }
@@ -3817,6 +3811,7 @@ class BrowserAutomation {
     const navLists = this.detectNavLists(element);
     if (navLists.length > 0) region.nav_lists = navLists;
 
+    // Use recursive grid detection within this region
     const cardGrids = this.detectCardGrids(element);
     if (cardGrids.length > 0) region.card_grids = cardGrids;
 
@@ -3833,6 +3828,11 @@ class BrowserAutomation {
       if (text.length > 0 && text.length < 500) {
         region.description = text.substring(0, 200);
       }
+    }
+
+    // Filter out empty regions unless they have a title
+    if (!region.title && !region.nav_lists && !region.card_grids && !region.price_blocks && !region.description) {
+      return null;
     }
 
     return region;
@@ -3868,21 +3868,24 @@ class BrowserAutomation {
       }
     }
 
-    return lists;
-  }
-
   detectCardGrids(container) {
     const grids = [];
-    const candidates = this.findRepeatedItemCandidates(container);
 
-    for (const group of candidates) {
-      if (group.items.length >= 3) {
-        const preview = this.extractCardPreview(group.items[0]);
-        grids.push({
-          type: group.type,
-          count: group.items.length,
-          preview: preview
-        });
+    // Use recursive search to find grids nested in this region
+    const gridContainers = this.findCardGridContainers(container);
+
+    for (const gridContainer of gridContainers) {
+      const candidates = this.findRepeatedItemCandidates(gridContainer);
+
+      for (const group of candidates) {
+        if (group.items.length >= 3) {
+          const preview = this.extractCardPreview(group.items[0]);
+          grids.push({
+            type: group.type,
+            count: group.items.length,
+            preview: preview
+          });
+        }
       }
     }
 
@@ -3978,6 +3981,16 @@ class BrowserAutomation {
       return prev.textContent.trim();
     }
     return ul.getAttribute('aria-label') || 'Navigation';
+  }
+
+  extractCardPreview(card) {
+    const title = card.querySelector('h1, h2, h3, h4, [class*="title"], [class*="name"]');
+    const image = card.querySelector('img');
+
+    return {
+      title: title ? title.textContent.trim().substring(0, 60) : null,
+      has_image: !!image
+    };
   }
 
   formatAsRegionsYAML(result) {

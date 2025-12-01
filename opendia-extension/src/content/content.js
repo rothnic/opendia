@@ -3871,6 +3871,9 @@ class BrowserAutomation {
       }
     }
 
+    return lists;
+  }
+
   detectCardGrids(container) {
     const grids = [];
 

@@ -137,6 +137,38 @@ If the Agent encounters a LinkedIn bot-check or an ambiguous "Headcount" label, 
 
 ---
 
+---
+
+## 🌍 OpenDia's Role in the Broader Ecosystem
+
+It is important to distinguish between **OpenDia** (the tool) and the **System** (the solution).
+
+*   **OpenDia (The Bridge)**: OpenDia itself is strictly the **Execution & Connectivity Layer**. Its responsibility is to provide a reliable, low-latency pipe into the browser and a suite of atomic tools (click, select, extract) that are robust against modern web defenses (CSP, Shadow DOM). It is **unopinionated** about the business logic.
+*   **The System (The Intelligence)**: The logic, storage, task scheduling, and domain-specific agents live *outside* OpenDia. They treat OpenDia as a powerful peripheral device. This separation allows OpenDia to be used as a:
+    *   **Library**: A dependency for a local CLI tool.
+    *   **component**: A headless execution engine for a cloud scraper.
+    *   **Companion**: A visual sidekick for a Next.js SaaS application.
+
+## ⚖️ Architectural Considerations & Constraints
+
+### 1. Extension vs. Native Code
+We prioritize running logic inside the **Chrome Extension** (JavaScript) over the **MCP Server** (Node.js/Python) whenever possible.
+*   **Why**: Extensions have privileged access to browser APIs (Tabs, Bookmarks, Cookies) and share the exact network stack of the user.
+*   **Constraint**: Chrome Extensions cannot execute arbitrary external binaries. Therefore, heavy computation (e.g., local vision models) or file system operations must be offloaded to the MCP Server, which acts as the "Sidecar" for the extension.
+
+### 2. The "Optimized Tool Injection" Pattern
+A key architectural goal is **Operational Efficiency**. We do not want the Agent to write raw JavaScript for every interaction (slow, error-prone).
+*   **Strategy**: We continuously identify common patterns (e.g., "Scrape Amazon Product", "Extract LinkedIn Profile") and compile them into optimized **Utility Scripts**.
+*   **Deployment**: These scripts are served via the Extension and injected into the page context.
+*   **Benefit**: The Agent simply calls `extract_product()` instead of generating 50 lines of fragile `document.querySelector` logic. OpenDia serves as the **Runtime Container** for these optimized tools.
+
+### 3. UI Customization
+While OpenDia provides the "Bridge," the **Human UI** (Sidebar) is designed to be extensible.
+*   **Constraint**: We avoid baking complex business logic into the Extension's native UI.
+*   **Solution**: The Sidebar should primarily serve as a **View Container** that renders remote UI or adaptive cards sent by the Agent, keeping the extension lightweight and the logic centralized in the Cloud/Application layer.
+
+---
+
 ## 🧩 Architectural Components
 
 ### 1. The Extension Subsystem (The "Hands & Eyes")

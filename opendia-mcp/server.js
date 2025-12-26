@@ -1602,6 +1602,10 @@ function getFallbackTools() {
           tab_id: {
             type: 'number',
             description: 'Target tab ID (defaults to active tab)'
+          },
+          message: {
+            type: 'string',
+            description: 'Optional instruction message to display to the user during selection'
           }
         }
       }

@@ -312,10 +312,22 @@ async function ensureContentScriptReady(tabId, retries = 3) {
 
           // Use appropriate API based on browser
           if (browser.scripting) {
-            // Chrome MV3
+            // Chrome MV3 - First reset the guard to allow re-injection
+            try {
+              await browser.scripting.executeScript({
+                target: { tabId: tabId },
+                func: () => {
+                  window.OpenDiaContentScriptLoaded = undefined;
+                }
+              });
+            } catch (resetError) {
+              console.log(`⚠️ Could not reset content script guard: ${resetError.message}`);
+            }
+
+            // Inject polyfill first, then content script
             await browser.scripting.executeScript({
               target: { tabId: tabId },
-              files: ['src/content/content.js']
+              files: ['src/polyfill/browser-polyfill.min.js', 'src/content/content.js']
             });
           } else {
             // Firefox MV2 - check if already injected first

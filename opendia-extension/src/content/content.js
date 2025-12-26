@@ -2787,21 +2787,29 @@ class BrowserAutomation {
   // 🎯 INTERACTIVE SELECTION TOOL
   async selectElement(data) {
     console.log("🎯 Starting interactive element selection");
+    const message = data.message || "Select an element on the page";
 
     return new Promise((resolve, reject) => {
-      this.selectionResolve = resolve;
-      this.selectionReject = reject;
-      this.enableSelectionMode();
+      this.selectionResolve = (result) => {
+        this.removeSelectionToast();
+        resolve(result);
+      };
+      this.selectionReject = (err) => {
+        this.removeSelectionToast();
+        reject(err);
+      };
+
+      this.enableSelectionMode(message);
 
       // Timeout after 60 seconds if no selection
       this.selectionTimeout = setTimeout(() => {
         this.disableSelectionMode();
-        reject(new Error("Selection timed out after 60 seconds"));
+        this.selectionReject(new Error("Selection timed out after 60 seconds"));
       }, 60000);
     });
   }
 
-  enableSelectionMode() {
+  enableSelectionMode(message) {
     // Create overlay element if it doesn't exist
     if (!this.selectionOverlay) {
       this.selectionOverlay = document.createElement('div');
@@ -2809,6 +2817,7 @@ class BrowserAutomation {
       this.selectionOverlay.style.cssText = `
         position: fixed;
         pointer-events: none;
+        display: none;
         background: rgba(0, 150, 255, 0.2);
         border: 2px solid #0096ff;
         z-index: 2147483647;
@@ -2836,6 +2845,9 @@ class BrowserAutomation {
       document.body.appendChild(this.selectionOverlay);
     }
 
+    // Create Toast
+    this.createSelectionToast(message);
+
     // Bind handlers
     this.boundHoverHandler = this.handleSelectionHover.bind(this);
     this.boundClickHandler = this.handleSelectionClick.bind(this);
@@ -2846,9 +2858,8 @@ class BrowserAutomation {
     document.addEventListener('click', this.boundClickHandler, true);
     document.addEventListener('keydown', this.boundEscHandler, true);
 
-    // Add global cursor style
-    this.originalBodyCursor = document.body.style.cursor;
-    document.body.style.cursor = 'crosshair';
+    // Add global cursor style and animated cursor
+    this.createAnimatedCursor();
 
     console.log("🎯 Selection mode enabled");
   }
@@ -2865,8 +2876,9 @@ class BrowserAutomation {
       this.selectionOverlay = null;
     }
 
-    // Restore cursor
-    document.body.style.cursor = this.originalBodyCursor || '';
+    // Remove cursor and toast
+    this.removeAnimatedCursor();
+    this.removeSelectionToast();
 
     // Clear timeout
     if (this.selectionTimeout) {
@@ -2875,6 +2887,134 @@ class BrowserAutomation {
     }
 
     console.log("🎯 Selection mode disabled");
+  }
+
+  createSelectionToast(message) {
+    if (this.selectionToast) this.selectionToast.remove();
+
+    this.selectionToast = document.createElement('div');
+    this.selectionToast.id = 'opendia-selection-toast';
+    this.selectionToast.style.cssText = `
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #333;
+      color: white;
+      padding: 12px 20px;
+      border-radius: 30px;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      z-index: 2147483647;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      font-family: sans-serif;
+      border: 1px solid #555;
+    `;
+
+    const icon = document.createElement('div');
+    icon.innerHTML = '🎯';
+
+    const text = document.createElement('div');
+    text.textContent = message;
+    text.style.fontWeight = 'bold';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.style.cssText = `
+      background: #ff4444;
+      border: none;
+      color: white;
+      padding: 5px 12px;
+      border-radius: 15px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: bold;
+    `;
+    cancelBtn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.handleSelectionEsc({ key: 'Escape', preventDefault: () => {}, stopPropagation: () => {} });
+    };
+
+    this.selectionToast.appendChild(icon);
+    this.selectionToast.appendChild(text);
+    this.selectionToast.appendChild(cancelBtn);
+    document.body.appendChild(this.selectionToast);
+  }
+
+  removeSelectionToast() {
+    if (this.selectionToast) {
+      this.selectionToast.remove();
+      this.selectionToast = null;
+    }
+  }
+
+  createAnimatedCursor() {
+    if (this.animatedCursor) this.animatedCursor.remove();
+
+    // Create styles for animation
+    const styleId = 'opendia-cursor-style';
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement('style');
+      style.id = styleId;
+      style.textContent = `
+        @keyframes opendia-pulse {
+          0% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+          50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.4; }
+          100% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+        }
+        .opendia-hide-cursor * { cursor: none !important; }
+      `;
+      document.head.appendChild(style);
+    }
+
+    document.documentElement.classList.add('opendia-hide-cursor');
+
+    this.animatedCursor = document.createElement('div');
+    this.animatedCursor.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 20px;
+      height: 20px;
+      background: rgba(0, 150, 255, 0.6);
+      border: 2px solid #fff;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 2147483647;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 10px rgba(0, 150, 255, 0.5);
+    `;
+
+    const pulse = document.createElement('div');
+    pulse.style.cssText = `
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 150, 255, 0.3);
+      border-radius: 50%;
+      animation: opendia-pulse 1.5s infinite ease-in-out;
+    `;
+    this.animatedCursor.appendChild(pulse);
+    document.body.appendChild(this.animatedCursor);
+
+    this.boundCursorHandler = (e) => {
+      this.animatedCursor.style.left = e.clientX + 'px';
+      this.animatedCursor.style.top = e.clientY + 'px';
+    };
+    document.addEventListener('mousemove', this.boundCursorHandler, true);
+  }
+
+  removeAnimatedCursor() {
+    document.documentElement.classList.remove('opendia-hide-cursor');
+    if (this.animatedCursor) {
+      this.animatedCursor.remove();
+      this.animatedCursor = null;
+    }
+    document.removeEventListener('mousemove', this.boundCursorHandler, true);
   }
 
   handleSelectionHover(event) {
@@ -2890,6 +3030,7 @@ class BrowserAutomation {
     this.selectionOverlay.style.left = rect.left + 'px';
     this.selectionOverlay.style.width = rect.width + 'px';
     this.selectionOverlay.style.height = rect.height + 'px';
+    this.selectionOverlay.style.display = 'block';
 
     // Update label
     const tagName = target.tagName.toLowerCase();

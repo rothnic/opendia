@@ -1,82 +1,101 @@
-# OpenDia System Architecture
+# OpenDia System Architecture & Interaction Design
 
-This document outlines the high-level architecture of the OpenDia system, highlighting the components that enable its unique "Companion" and "Human-in-the-Loop" capabilities.
+OpenDia is a **Shared Reality** framework designed for collaborative, human-in-the-loop browser automation. Unlike traditional automation tools that operate in isolation, OpenDia bridges the gap between local user environments and remote AI intelligence.
 
-## System Diagram
+## 🏗️ System Topology: The "Bridge" Pattern
+
+The system is architected as a series of nested subsystems that span from remote cloud services to your local device.
 
 ```mermaid
 graph TD
-    subgraph "User Browser (Chrome/Edge)"
-        Page[Target Webpage]
+    %% Cloud Subsystem
+    subgraph CloudSubsystem [Cloud / Remote Intelligence]
+        WebApp[Next.js Application]
+        AgentBrain[AI Agent Logic / LLM]
+        WebApp <--> AgentBrain
+    end
+
+    %% Network Hub
+    Tunnel[Public SSE Tunnel / Ngrok]
+
+    %% Local Machine Subsystem
+    subgraph LocalMachine [User's Local Machine]
+        MCP[OpenDia MCP Server<br/>'Singleton Hub']
         
-        subgraph "OpenDia Extension"
-            CS[Content Script]
-            BSW[Background Service Worker]
-            Sidebar[Sidebar UI / Companion App]
+        subgraph BrowserSubsystem [Web Browser Context]
+            subgraph ExtensionSubsystem [OpenDia Extension]
+                BG[Background Script<br/>'Orchestrator']
+                CS[Content Scripts<br/>'The Hands']
+                Sidebar[Sidebar / Popup UI<br/>'H-I-I-L Control']
+            end
+            
+            WebPage[Target Website<br/>'Real Sessions/Cookies']
         end
-        
-        Page <-->|DOM Access & Events| CS
-        CS <-->|Message Passing| BSW
-        Sidebar <-->|User Input & Feedback| BSW
     end
 
-    subgraph "MCP Layer"
-        MCP[MCP Server]
-        Transport[Transport (Stdio / SSE)]
-    end
+    %% Communication Flow
+    AgentBrain -- "1. Tool Call (SSE)" --> WebApp
+    WebApp -- "2. Forward via Tunnel" --> Tunnel
+    Tunnel -- "3. Deliver to Local" --> MCP
+    MCP -- "4. WebSocket Bridge" --> BG
+    BG <--> CS
+    Sidebar -- "Local Message" --> BG
+    CS -- "5. DOM Actions / Overlays" --> WebPage
 
-    subgraph "Intelligence Layer"
-        Agent[AI Agent / LLM]
-    end
-
-    BSW <-->|Native Messaging / WebSocket| MCP
-    MCP <-->|Protocol| Agent
-    
-    %% Unique Interactions
-    Sidebar -.->|Element Selection Override| Agent
-    Agent -.->|Extraction Request| CS
+    %% Styling
+    style CloudSubsystem fill:#f9f9f9,stroke:#333
+    style LocalMachine fill:#fff,stroke:#333
+    style ExtensionSubsystem fill:#e1f5fe,stroke:#01579b
+    style MCP fill:#fff9c4,stroke:#fbc02d
 ```
 
-## Core Components
+---
 
-### 1. The Browser Extension (The "Body")
--   **Content Script (CS)**: Injected into the target webpage. It has direct access to the DOM.
-    -   *Responsibilities*: Reading HTML, executing `page_execute_script`, highlighting elements, capturing user clicks for selection.
--   **Background Service Worker (BSW)**: The orchestrator within the browser.
-    -   *Responsibilities*: Managing connection to the MCP server, maintaining state across tab switches, routing messages between the Sidebar and Content Scripts.
--   **Sidebar UI**: The user interface.
-    -   *Responsibilities*: Displaying agent status, showing extracted data for review, providing the "Select Element" tool for corrections.
+## 🎭 Core Scenario: A Human-Agent Session
 
-### 2. The MCP Server (The "Bridge")
--   **Role**: Translates high-level Agent intents (e.g., "Extract Price") into low-level browser commands (e.g., `document.querySelector(...)`).
--   **Transport**:
-    -   **Stdio**: For local, headless automation or when running the agent locally.
-    -   **SSE (Server-Sent Events)**: For connecting to remote agents or web-based LLM interfaces.
+To understand the architecture, consider this end-to-end workflow:
 
-### 3. The AI Agent (The "Brain")
--   **Role**: Decides *what* to do based on the page content and user goal.
--   **Logic**:
-    -   Receives HTML snapshot or accessibility tree.
-    -   Decides which selectors to use.
-    -   Generates JSON output.
-    -   *Crucially*: Updates its internal "Playbook" for the site based on user feedback.
+### 1. The Setup (Local)
+The user boots their machine and starts the **OpenDia MCP Server** as a singleton service. This server acts as the local air-traffic controller, waiting for instructions. At the same time, the **Browser Extension** establishes a persistent WebSocket connection to this local server.
 
-## Unique Architectural Features
+### 2. The Instruction (Cloud)
+The user visits a **Next.js Web Application** where a specialized AI Agent lives. The user asks: *"Research these companies on LinkedIn and export their current headcounts."*
 
-### A. The "Shared Reality" Engine
-Unlike Playwright/Puppeteer, which typically spin up a fresh, isolated browser instance, OpenDia inhabits the **user's existing, authenticated reality**.
--   **Context Parity**: The agent sees exactly what the user sees (same cookies, same session, same A/B test variant).
--   **Zero-Config Access**: No need to manage login scripts or 2FA bypasses. If the user is logged in, the agent is logged in.
--   **Bot-Proof**: Requests originate from a genuine user browser with genuine user interaction patterns, making them invisible to most anti-bot systems.
+### 3. The Instruction Chain
+*   **The Brain**: The Agent (in the Cloud) decides to use the `page_navigate` tool.
+*   **The Delivery**: The Next.js app sends this command through an **SSE (Server-Sent Events) Tunnel** directly to the user's **Local MCP Server**.
+*   **The Bridge**: The MCP Server routes this to the **Extension Background Script**.
 
-### B. The "Human-in-the-Loop" Feedback Loop
-This is the system's key differentiator.
-1.  **Prediction**: Agent guesses the data location (e.g., `#price-123`).
-2.  **Visualization**: Extension highlights `#price-123` in the browser.
-3.  **Correction**: User sees it's wrong, clicks the *actual* price element (`#real-price`).
-4.  **Refinement**: The Sidebar captures the unique selector for `#real-price` and sends it back to the Agent.
-5.  **Learning**: The Agent updates the "Playbook" for this domain, ensuring the next extraction is correct.
+### 4. Smart Execution (The Library)
+Rather than writing raw JavaScript for every click, the Extension utilizes a **Script Execution Engine** with two layers:
+*   **Pre-injected Utilities**: A "Standard Library" of optimized functions for form-filling, robust clicking (bypassing CSP), and pattern recognition.
+*   **Dynamic Scripts**: Bespoke code generated by the Agent for unique, one-off page analysis.
 
-### C. Hybrid Execution Mode
--   **Supervised Mode**: Running in the user's browser with the Sidebar active. Used for training and ad-hoc tasks.
--   **Headless Mode**: The *exact same* MCP tools and Playbooks can be run in a headless browser container for high-volume, automated scraping, using the rules learned during Supervised Mode.
+### 5. Human-in-the-Loop (Shared Reality)
+If the Agent encounters a LinkedIn bot-check or an ambiguous "Headcount" label, it invokes `select_element`. 
+*   **The UI**: A prompt appears in the user's browser via a **Content Script overlay**.
+*   **The Input**: The user hovers over the correct element and clicks. 
+*   **The Loop**: The result is sent back up the chain to the Cloud Agent, which now has the high-fidelity metadata (CSS selector, HTML snippet) to continue the task autonomously.
+
+---
+
+## 🧩 Architectural Components
+
+### 1. The Local MCP Server (The Singleton Hub)
+*   **Role**: A stateless broker that remains running regardless of which agent is active.
+*   **Why**: By running it as a singleton, you can connect multiple agents (Claude Desktop, Cursor, and the Next.js Web App) to the same browser concurrently without resource conflicts.
+
+### 2. The Extension Subsystem
+*   **Background Script (BSO)**: The "Orchestrator." It maintains the connection to the MCP server and manages the lifecycle of the Sidebar and Content Scripts.
+*   **Content Scripts (CS)**: The "Hands." Injected into web pages to actually touch the DOM. They provide the visual pulse cursors and toast notifications during selection.
+*   **Sidebar/Popup UI**: The "Cockpit." Allows the human to see what the agent is doing, review extracted data, or manually override the agent's actions.
+
+### 3. The Intelligence Layer (External)
+*   **Next.js Agent**: A modern, web-based interface that leverages the MCP protocol to delegate browser actions to the user's local hardware. This keeps the complex AI logic in the cloud while maintaining execution on the "edge" (the user's browser).
+
+---
+
+## 🔒 Security & Context
+OpenDia's primary architectural advantage is **Context Parity**. Because the automation runs in your real browser:
+*   **Authentication**: It uses your existing cookies and sessions. No 2FA scripts required.
+*   **Integrity**: Actions are indistinguishable from human activity because they originate from a genuine browser environment with real fingerprints and history.

@@ -9,13 +9,17 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
     "format": "prettier --write \"**/*.{js,json,md}\"",
-    "format:check": "prettier --check \"**/*.{js,json,md}\""
+    "format:check": "prettier --check \"**/*.{js,json,md}\"",
+    "test:interactive": "node tests/select-element/interactive-test.js",
+    "test:capture": "node tests/select-element/capture-demo.js"
   },
   "dependencies": {
+    "jsdom": "^27.2.0",
     "ws": "^8.18.3"
   },
   "devDependencies": {
     "@vitest/ui": "^4.0.2",
+    "playwright": "^1.48.2",
     "prettier": "^3.6.2",
     "vitest": "^4.0.2"
   }

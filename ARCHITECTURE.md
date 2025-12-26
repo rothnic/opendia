@@ -137,8 +137,6 @@ If the Agent encounters a LinkedIn bot-check or an ambiguous "Headcount" label, 
 
 ---
 
----
-
 ## 🌍 OpenDia's Role in the Broader Ecosystem
 
 It is important to distinguish between **OpenDia** (the tool) and the **System** (the solution).
@@ -166,6 +164,33 @@ A key architectural goal is **Operational Efficiency**. We do not want the Agent
 While OpenDia provides the "Bridge," the **Human UI** (Sidebar) is designed to be extensible.
 *   **Constraint**: We avoid baking complex business logic into the Extension's native UI.
 *   **Solution**: The Sidebar should primarily serve as a **View Container** that renders remote UI or adaptive cards sent by the Agent, keeping the extension lightweight and the logic centralized in the Cloud/Application layer.
+
+### 4. Continuous Optimization Loop
+To prevent regression, the architecture demands an external **Verification Layer** (e.g., Evalite, LangSmith).
+*   **Process**: Monitoring Agents observe task execution. If a tool fails (e.g., "Add to Cart" changes selector), the system flags it.
+*   **Correction**: A specialized "Optimizer Agent" tests new selectors against the page, verifies success, and deploys an updated **Utility Script**.
+*   **Validation**: This closed-loop system ensures that the agent's tools improve over time without manual code updates.
+
+---
+
+## 🔮 Future-Proofing & Advanced Patterns
+
+### A. Multi-Agent Fan-Out (Sub-Agents)
+Complex tasks (e.g., "Research 50 Competitors") cannot be solved linearly in a single tab.
+*   **Strategy**: The Primary Agent can spawn **Sub-Agents**.
+*   **Execution**: These can run in background tabs (hidden from the user) or spin up **Cloud Browsers** (Headless OpenDia instances) to parallelize the workload.
+*   **Result**: The Primary Agent aggregates findings from 50 parallel research streams and presents a summary to the user.
+
+### B. Production UX & Activation
+For enterprise adoption, "Always-On" is not viable.
+*   **Explicit Activation**: The user must have clear controls to "Activate Assistant" for a specific tab or domain.
+*   **Visual Indicators**: The extension icon acts as a status beacon (Green = Active/Listening, Gray = Dormant).
+*   **Scope Boundaries**: Users can define "Safe Zones" (e.g., *Only run on salesforce.com*) to prevent the agent from reading sensitive personal email tabs.
+
+### C. The "Zero-Scope" Advantage
+Unlike Playwright/Puppeteer, OpenDia does **NOT** require a fresh browser context for every run.
+*   **Persistent Context**: It keeps running in the background. The agent can "drop in" to a running session, perform a task, and "drop out" without the overhead of launching a browser or handling 2FA.
+*   **No Approval Fatigue**: Once the domain is trusted, interactions (like extracting data) happen seamlessly. Human intervention is reserved for *decisions* (e.g., "Confirm Purchase"), not *mechanics* (e.g., "Click Next").
 
 ---
 

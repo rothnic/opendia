@@ -8,45 +8,88 @@ The system is architected as a series of nested subsystems that span from remote
 
 ```mermaid
 graph TD
+    %% User Figure
+    User([fa:fa-user User])
+
     %% Cloud Subsystem
-    subgraph CloudSubsystem [Cloud / Remote Intelligence]
-        WebApp[Next.js Application]
-        AgentBrain[AI Agent Logic / LLM]
+    subgraph CloudSubsystem [Cloud: Intelligence & Memory]
+        subgraph AppLayer [Interface]
+            WebApp[Next.js Application]
+        end
+
+        subgraph IntelligenceLayer [Agents]
+            AgentBrain{{AI Agent Logic / LLM}}
+            MonitoringAgents{{Monitoring Agents}}
+        end
+
+        subgraph StorageLayer [Data Storage]
+            ContextStore[(Contextual Store)]
+            DomainStore[(Domain Store)]
+            SessionStore[(Session Store)]
+        end
+
+        subgraph CloudTools [Cloud Tools]
+            ExternalTools[Ext. APIs & Data Mgmt]
+        end
+
         WebApp <--> AgentBrain
+        WebApp <--> MonitoringAgents
+        MonitoringAgents <--> AgentBrain
+        AgentBrain <--> ExternalTools
+        AgentBrain <--> StorageLayer
     end
 
     %% Network Hub
-    Tunnel[Public SSE Tunnel / Ngrok]
+    Tunnel[Public SSE Tunnel]
 
     %% Local Machine Subsystem
     subgraph LocalMachine [User's Local Machine]
-        MCP[OpenDia MCP Server<br/>'Singleton Hub']
+        MCP[OpenDia MCP Server Hub]
         
-        subgraph BrowserSubsystem [Web Browser Context]
-            subgraph ExtensionSubsystem [OpenDia Extension]
-                BG[Background Script<br/>'Orchestrator']
-                CS[Content Scripts<br/>'The Hands']
-                Sidebar[Sidebar / Popup UI<br/>'H-I-I-L Control']
+        subgraph Browsers [Browser Context]
+            subgraph ExtensionSubsystem [OpenDia Extension Subsystem]
+                BG[Background Orchestrator]
+                
+                subgraph ToolExecution [Browser Tool Suite]
+                    CS_Select[select_element]
+                    CS_Structure[page_structure]
+                    CS_Script[execute_script]
+                    CS_Upload[file_upload]
+                end
+                
+                Sidebar[Sidebar UI]
             end
             
-            WebPage[Target Website<br/>'Real Sessions/Cookies']
+            WebPage[Target Websites]
         end
+        
+        LocalCLI{{Local CLI Agent}}
     end
 
+    %% Human Interactions
+    User -- "Manage Tasks" --> WebApp
+    User -- "Run Adhoc Task" --> Sidebar
+
     %% Communication Flow
-    AgentBrain -- "1. Tool Call (SSE)" --> WebApp
-    WebApp -- "2. Forward via Tunnel" --> Tunnel
-    Tunnel -- "3. Deliver to Local" --> MCP
-    MCP -- "4. WebSocket Bridge" --> BG
-    BG <--> CS
-    Sidebar -- "Local Message" --> BG
-    CS -- "5. DOM Actions / Overlays" --> WebPage
+    AgentBrain -- "Tool Call" --> WebApp
+    WebApp -- "Forward" --> Tunnel
+    Tunnel -- "Deliver" --> MCP
+    MCP -- "WS Bridge" --> BG
+    BG <--> ToolExecution
+    ToolExecution -- "DOM Access" --> WebPage
+    LocalCLI -- "Stdio" --> MCP
 
     %% Styling
-    style CloudSubsystem fill:#f9f9f9,stroke:#333
-    style LocalMachine fill:#fff,stroke:#333
-    style ExtensionSubsystem fill:#e1f5fe,stroke:#01579b
-    style MCP fill:#fff9c4,stroke:#fbc02d
+    classDef agent fill:#b2dfdb,stroke:#00695c,stroke-width:2px;
+    classDef tool fill:#e1f5fe,stroke:#01579b,stroke-width:1px;
+    classDef storage fill:#fff9c4,stroke:#fbc02d,stroke-width:1px;
+    classDef infra fill:#f5f5f5,stroke:#333,stroke-width:1px;
+
+    class AgentBrain,MonitoringAgents,LocalCLI agent;
+    class WebApp,MCP,BG,CS_Select,CS_Structure,CS_Script,CS_Upload,Sidebar,ExternalTools,Tunnel tool;
+    class ContextStore,DomainStore,SessionStore storage;
+    class WebPage,LocalMachine,CloudSubsystem,Browsers,ExtensionSubsystem infra;
+    style User fill:#333,color:#fff
 ```
 
 ---
@@ -81,17 +124,24 @@ If the Agent encounters a LinkedIn bot-check or an ambiguous "Headcount" label, 
 
 ## 🧩 Architectural Components
 
-### 1. The Local MCP Server (The Singleton Hub)
-*   **Role**: A stateless broker that remains running regardless of which agent is active.
-*   **Why**: By running it as a singleton, you can connect multiple agents (Claude Desktop, Cursor, and the Next.js Web App) to the same browser concurrently without resource conflicts.
+### 1. The Extension Subsystem (The "Hands & Eyes")
+-   **Content Scripts (CS)**: Injected into web pages to actually touch the DOM. They provide the visual pulse cursors and toast notifications during selection.
+-   **Background Script (BG)**: The "Orchestrator." It maintains the connection to the MCP server and manages the lifecycle of the Sidebar and Content Scripts.
+-   **Sidebar/Popup UI**: The "Cockpit." Allows the human to see what the agent is doing, review extracted data, or manually override the agent's actions (**Run Task**, **Perform Adhoc Task**, **Save Task for Later**).
 
-### 2. The Extension Subsystem
-*   **Background Script (BSO)**: The "Orchestrator." It maintains the connection to the MCP server and manages the lifecycle of the Sidebar and Content Scripts.
-*   **Content Scripts (CS)**: The "Hands." Injected into web pages to actually touch the DOM. They provide the visual pulse cursors and toast notifications during selection.
-*   **Sidebar/Popup UI**: The "Cockpit." Allows the human to see what the agent is doing, review extracted data, or manually override the agent's actions.
+### 2. The Local MCP Server (The "Bridge")
+-   **Role**: A stateless, singleton broker that translates agent intents into browser commands.
+-   **Connectivity**: Allows multiple agents (Cloud-based, CLI, or IDE) to share the same browser context simultaneously.
 
-### 3. The Intelligence Layer (External)
-*   **Next.js Agent**: A modern, web-based interface that leverages the MCP protocol to delegate browser actions to the user's local hardware. This keeps the complex AI logic in the cloud while maintaining execution on the "edge" (the user's browser).
+### 3. The Cloud Infrastructure (The "Brain & Memory")
+-   **Intelligence Layer**:
+    -   **AI Agent (LLM)**: Core reasoning engine that decides which tools to invoke based on user goals.
+    -   **Monitoring Agents**: Specialized observers that track recurring tasks, identify bottlenecks, and deploy optimized browser utilities.
+-   **Advanced Tooling**: The Agent can query **External APIs** and perform complex **Data Management** across your domain datasets.
+-   **Backend Storage**:
+    -   **Contextual Store**: Captures "Learnings" and past experiences to refine future reasoning.
+    -   **Domain Store**: Holds structured domain objects extracted from the web to guide future tasks.
+    -   **Session Store**: Manages transient state and agent memory for active workflows.
 
 ---
 

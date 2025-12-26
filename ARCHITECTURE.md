@@ -12,13 +12,14 @@ graph TD
     User([fa:fa-user User])
 
     %% Cloud Subsystem
-    subgraph CloudSubsystem [Cloud: Intelligence & Memory]
+    subgraph CloudSubsystem [Cloud: Intelligence, Safety & Memory]
         subgraph AppLayer [Interface]
             WebApp[Next.js Application]
         end
 
-        subgraph IntelligenceLayer [Agents]
+        subgraph IntelligenceLayer [Agents & Guardrails]
             AgentBrain{{AI Agent Logic / LLM}}
+            SafetyGuard{{Safety & Policy Guardrails}}
             MonitoringAgents{{Monitoring Agents}}
         end
 
@@ -35,8 +36,10 @@ graph TD
         WebApp <--> AgentBrain
         WebApp <--> MonitoringAgents
         MonitoringAgents <--> AgentBrain
-        AgentBrain <--> ExternalTools
-        AgentBrain <--> StorageLayer
+        AgentBrain --> SafetyGuard
+        SafetyGuard <--> ExternalTools
+        SafetyGuard <--> StorageLayer
+        AgentBrain -.-> ContextStore
     end
 
     %% Network Hub
@@ -49,6 +52,7 @@ graph TD
         subgraph Browsers [Browser Context]
             subgraph ExtensionSubsystem [OpenDia Extension Subsystem]
                 BG[Background Orchestrator]
+                Notify[Notification Manager]
                 
                 subgraph ToolExecution [Browser Tool Suite]
                     CS_Select[select_element]
@@ -67,28 +71,39 @@ graph TD
     end
 
     %% Human Interactions
-    User -- "Manage Tasks" --> WebApp
-    User -- "Run Adhoc Task" --> Sidebar
+    User -- "Manage Tasks & Feedback" --> WebApp
+    User -- "Manual Override / Correction" --> Sidebar
+    User -. "System Alerts" .- Notify
 
     %% Communication Flow
-    AgentBrain -- "Tool Call" --> WebApp
+    SafetyGuard -- "Approved Tool Call" --> WebApp
     WebApp -- "Forward" --> Tunnel
     Tunnel -- "Deliver" --> MCP
     MCP -- "WS Bridge" --> BG
     BG <--> ToolExecution
+    BG --> Notify
     ToolExecution -- "DOM Access" --> WebPage
     LocalCLI -- "Stdio" --> MCP
+
+    %% Feedback & Learning
+    Sidebar -- "Correction Data" --> BG
+    BG --> MCP
+    MCP --> Tunnel
+    Tunnel --> WebApp
+    WebApp -- "New Training Examples" --> ContextStore
 
     %% Styling
     classDef agent fill:#b2dfdb,stroke:#00695c,stroke-width:2px;
     classDef tool fill:#e1f5fe,stroke:#01579b,stroke-width:1px;
     classDef storage fill:#fff9c4,stroke:#fbc02d,stroke-width:1px;
     classDef infra fill:#f5f5f5,stroke:#333,stroke-width:1px;
+    classDef safety fill:#ffccbc,stroke:#d84315,stroke-width:2px;
 
     class AgentBrain,MonitoringAgents,LocalCLI agent;
-    class WebApp,MCP,BG,CS_Select,CS_Structure,CS_Script,CS_Upload,Sidebar,ExternalTools,Tunnel tool;
+    class WebApp,MCP,BG,CS_Select,CS_Structure,CS_Script,CS_Upload,Sidebar,ExternalTools,Tunnel,Notify tool;
     class ContextStore,DomainStore,SessionStore storage;
     class WebPage,LocalMachine,CloudSubsystem,Browsers,ExtensionSubsystem infra;
+    class SafetyGuard safety;
     style User fill:#333,color:#fff
 ```
 

@@ -1,174 +1,308 @@
 # OpenDia <img src="opendia-extension/icons/icon-128.png" alt="OpenDia" width="32" height="32">
 
 **The open alternative to Dia / Perplexity Comet**  
-Connect your browser to AI models—works seamlessly with Chrome, Firefox, and any Chromium browser.
+Connect your browser to AI models. 
+No browser switching needed—works seamlessly with Chrome, Firefox, and any Chromium browser. Private, local-first & MCP focused.
+If you are not technical / never used MCPs before, we recommend using **[Perplexity Comet](https://pplx.ai/leosimon)**.
 
-### 📝 Project Summary
-OpenDia is a powerful "Shared Reality" bridge between AI agents and your browser. Unlike traditional automation, it runs as a native extension, utilizing your real sessions and cookies. This fork introduces **Human-In-The-Loop (HIIL)** capabilities, allowing agents to collaborate directly with you on complex tasks through visual overlays and custom interactive tools.
+[![npm version](https://img.shields.io/npm/v/opendia)](https://www.npmjs.com/package/opendia)
+[![GitHub release](https://img.shields.io/github/release/aaronjmars/opendia.svg)](https://github.com/aaronjmars/opendia/releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
----
+## 📺 See it in Action
 
-## 🎯 Select Element Tool (Collaborative HIIL)
+![OpenDia Demo](./preview.gif)
 
-**NEW in this fork:** Premium interactive element selection designed for collaborative **human-in-the-loop (HIIL)** workflows.
+## 🚀 What is OpenDia?
 
-![Select Element Demo](./assets/select-element-demo.gif)
+OpenDia lets AI models control your browser automatically. **The key advantage? It leverages everything you already have**—your logged-in accounts, saved passwords, cookies, wallets, and browsing history. No need to start from scratch or switch contexts.
 
-This tool bridges the gap between autonomous agents and human intuition. When an agent is unsure about a specific element (e.g., identifying a "Submit" button in a complex SPA), it can call `select_element` to engage the user.
+**🔑 Use Your Existing Digital Life:**
+- ✅ **Logged-in accounts**: Post to Twitter/X, LinkedIn, Facebook with your existing sessions
+- ✅ **Browser data**: Access your bookmarks, history, and saved passwords
+- ✅ **Extensions & wallets**: Use MetaMask, password managers, or any installed extensions
+- ✅ **Cookies & sessions**: Stay authenticated across all your favorite sites
+- ✅ **Local testing**: Perfect for development with Cursor - test with real user sessions
 
-- **Contextual Instruction**: Pass a custom `message` to the user in a sticky toast.
-- **Visual Feedback**: Pulsing blue circular cursor and real-time element highlighting.
-- **Structured Hand-off**: Agent receives CSS paths, attributes, HTML snippets, and parent hierarchy.
-- **Safety**: Built-in "Cancel" and ESC key support.
+**✨ Key Benefits:**
+- 🔄 **Universal AI Support**: Works with Claude, ChatGPT, Cursor and even local models
+- 🎯 **Anti-Detection**: Specialized bypasses for Twitter/X, LinkedIn, Facebook
+- 📱 **Smart Automation**: AI understands your pages and finds the right elements
+- 🛡️ **Privacy-First**: Everything runs locally, your data stays with you
+- ⚡ **Zero Setup**: Get started with one command
 
----
+## 🌐 Browser Support
 
-## 📊 Key Features & Fork Additions
+Works with **Chrome, Firefox, and any Chromium-based browser**:
+- ✅ **Google Chrome**
+- ✅ **Arc**
+- ✅ **Mozilla Firefox**
+- ✅ **Microsoft Edge**
+- ✅ **Brave**
+- ✅ **Opera**
+- ✅ **Any Chromium based browser**
 
-| Feature | Origin | Status | Description |
-|---------|--------|--------|-------------|
-| **`select_element` Tool** | ✨ Fork | ✅ GA | Premium HIIL selection with toast, pulse cursor, and custom instructions |
-| **`page_execute_script` Tool** | ✨ Fork | ✅ Working | Execute JS in page context, bypassing CSP (Great for data extraction) |
-| **`page_structure` Tool** | ✨ Fork | 🚧 WIP | Intelligent page analysis with repeated pattern detection |
-| **SSE Transport** | ✨ Fork | ✅ Working | Connect remote AI agents via HTTP/SSE |
-| **Universal Automation** | 🏛️ Upstream | ✅ Working | Navigate, click, fill forms, and manage tabs across any site |
-| **Anti-Detection** | 🏛️ Upstream | ✅ Working | Specialized bypasses for Twitter/X, LinkedIn, and Facebook |
+Also perfect for **Cursor users** who want to automate their local testing and development workflows!
 
----
+## 🎬 What You Can Do
 
-## 🚀 Quick Start
+**Real workflows you can try today:**
 
-### 1. Install the Extension
-- **Chrome/Arc/Edge**: Load `opendia-extension/dist/chrome` as an **Unpacked Extension** in `chrome://extensions/`.
-- **Firefox**: Load `manifest.json` from `opendia-extension/dist/firefox` as a **Temporary Add-on** in `about:debugging`.
+### 📰 Content & Social Media
+- **"Summarize all the articles I read today and post a Twitter thread about the key insights"**
+- **"Find interesting articles related to AI from my bookmarks and create a reading list"**
+- **"Read this article and post a thoughtful comment on the LinkedIn version"**
+- **"Check my recent Twitter bookmarks and summarize the main themes"**
+
+### 📧 Productivity & Research
+- **"Browse my latest emails and tell me what needs urgent attention"**
+- **"Find all the GitHub repos I visited this week and create a summary report"**
+- **"Extract the main points from this research paper and save them to my notes"**
+- **"Search my browsing history for that article about AI safety I read last month"**
+
+### 🤖 Development & Testing (Perfect for Cursor!)
+- **"Test my web app's signup flow and take screenshots at each step"**
+- **"Fill out this form with test data and check if validation works"**
+- **"Navigate through my app and check if all the buttons work properly"**
+- **"Use my connected wallet to test this DeFi interface"**
+
+### 🔄 Advanced Automation
+- **"Open tabs for all my daily news sources and summarize the top stories"**
+- **"Draft replies to my unread messages based on the context"**
+- **"Monitor this webpage and notify me when the content changes"**
+- **"Automatically bookmark interesting articles I'm reading"**
+
+### 🎨 Visual Customization & Fun
+- **"Apply a cyberpunk theme to this documentation site to make it more engaging"**
+- **"Make this page dark mode with green text for late-night reading"**
+- **"Add rainbow party effects to celebrate finishing this project"**
+- **"Transform this boring form with a retro 80s theme while I fill it out"**
+- **"Use high contrast styling so I can read this better"**
+
+## ⚡ Quick Start
+
+### 1. Install the Browser Extension
+
+**For Chrome/Chromium browsers:**
+1. Download `opendia-chrome-1.1.0.zip` from [releases](https://github.com/aaronjmars/opendia/releases)
+2. Extract the zip file to a folder
+3. Go to `chrome://extensions/` (or your browser's extension page)
+4. Enable "Developer mode"
+5. Click "Load unpacked" and select the extracted folder
+
+**For Firefox:**
+1. Download `opendia-firefox-1.1.0.zip` from [releases](https://github.com/aaronjmars/opendia/releases)
+2. Extract the zip file to a folder
+3. Go to `about:debugging#/runtime/this-firefox`
+4. Click "Load Temporary Add-on..."
+5. Select the `manifest.json` file from the extracted folder
+
+> **Note**: Firefox extensions are loaded as temporary add-ons and will be removed when Firefox restarts. This is a Firefox limitation for unsigned extensions.
 
 ### 2. Connect to Your AI
-Add this to your Claude Desktop or Cursor configuration:
+
+**Option 1: Double-click Installation (Recommended)**
+1. Download the `opendia.dxt` file from [releases](https://github.com/aaronjmars/opendia/releases)
+2. Double-click the `.dxt` file to install automatically
+3. The MCP will be added to your Claude Desktop configuration
+
+**Option 2: Manual Configuration**
+Add to your Claude Desktop configuration:
 ```json
 {
   "mcpServers": {
     "opendia": {
       "command": "npx",
-      "args": ["-y", "opendia"]
+      "args": ["opendia"]
     }
   }
 }
 ```
-*Or run locally:* `npx opendia` (Standard) or `npx opendia --tunnel` (for online AI access via ngrok).
 
----
+**For Cursor or other AI tools**, use the same configuration or follow their specific setup instructions.
 
-## 📽️ Example Workflows
+## Usage Modes
 
-- **Social Media**: *"Summarize this article and post it as a thread to my Twitter account"* (Uses anti-detection bypass).
-- **Research**: *"Find all GitHub repos I visited today and summarize their READMEs."*
-- **HIIL Debugging**: *"I can't find the checkout button on this page, can you point it out for me?"* (Triggers `select_element`).
-- **Development**: *"Fill out this signup form with test data and verify the validation errors."*
+### Local Mode (Default)
+```bash
+npx opendia
+```
+- Chrome extension: ws://localhost:5555 (auto-discovery enabled)
+- Claude Desktop: stdio (existing config)
+- Local SSE: http://localhost:5556/sse
 
----
+### Port Configuration
+```bash
+# Use custom ports
+npx opendia --port=6000              # Uses 6000 (WebSocket) + 6001 (HTTP)
+npx opendia --ws-port=5555 --http-port=5556  # Specify individually
 
----
-
-## 🧭 Why OpenDia? (Strategy & Comparison)
-
-While general-purpose browser automation tools exist, OpenDia takes a **bespoke extension-first approach** to solve enterprise and agentic challenges that standard frameworks struggle with:
-
-### 🚀 Beyond Standard Automation
-*   **Custom Tooling**: We build specialized capabilities that aren't supported efficiently elsewhere. Example: Our `file_upload` tool can target native file input boxes directly via the extension API, bypassing the friction of complex Playwright/Puppeteer scripts.
-*   **Zero-Detection Surface**: By running inside your actual browser as an extension, OpenDia leverages your real sessions, cookies, and fingerprint. This avoids the "bot detection" hurdles that often break headful automation in social media or banking contexts.
-*   **Infinite Extensibility**: Need a tool that interacts with a specific Chrome API (like bookmarks, tabs, or devtools)? We can wrap it into an MCP tool in minutes, something heavy-weight automation drivers aren't designed for.
-*   **Seamless HIIL**: Unlike dedicated browser environments that isolate the agent, OpenDia lives in **your** browser. This enables unique "shared reality" interactions where you and the AI can collaborate on the same page simultaneously using visual overlays.
-
----
-
-## 🏗️ How It Works (System Topology)
-
-```mermaid
-graph TD
-    %% External / Cloud Realm
-    subgraph Cloud [Cloud / Remote Services]
-        RemoteAgent[Next.js App<br/>'Where the AI Agent lives']
-    end
-
-    %% Your Local Machine Container
-    subgraph LocalMachine [Your Personal Computer]
-        User((User))
-
-        %% Local Server
-        MCP[OpenDia MCP Server<br/>'Singleton Service']
-        
-        %% Browser Container
-        subgraph Browsers [Google Chrome / Browser]
-            subgraph ExtensionSubsystem [OpenDia Extension]
-                Sidebar[Sidebar / Popup UI]
-                BG[Background Script]
-                CS[Content Scripts]
-            end
-            
-            WebPage[Websites / SPAs<br/>'Logged-in Sessions']
-        end
-        
-        CLI[Local CLI Agent<br/>'Claude Desktop']
-    end
-
-    %% Human Interactions
-    User -- "1. Logs into & chats with" --> RemoteAgent
-    User -- "2. Directly controls via" --> Sidebar
-
-    %% Data Flow
-    RemoteAgent -- "3. Commands via Tunnel (SSE)" --> MCP
-    CLI -- "Stdio (MCP)" --> MCP
-    MCP -- "4. Real-time Bridge (WS)" --> BG
-    
-    %% Internal Extension Logic
-    Sidebar -- "Internal Message" --> BG
-    BG <--> CS
-    CS -- "5. DOM Actions / Overlays" --> WebPage
-
-    %% Styling
-    style Cloud fill:#f5f5f5,stroke:#333,stroke-dasharray: 5 5
-    style LocalMachine fill:#fff,stroke:#333,stroke-width:2px
-    style Browsers fill:#e1f5fe,stroke:#01579b
-    style ExtensionSubsystem fill:#b3e5fc,stroke:#01579b
-    style MCP fill:#fff9c4,stroke:#fbc02d,stroke-width:2px
-    style User fill:#333,color:#fff
+# Handle port conflicts  
+# Note: Existing OpenDia processes are automatically terminated on startup
 ```
 
-### 📡 System Responsibilities & Location
+### Auto-Tunnel Mode
+```bash
+npx opendia --tunnel
+```
+- Automatically creates ngrok tunnel
+- Copy URL for ChatGPT/online AI services
+- Local functionality preserved
 
-1.  **The Cloud Agent**: When you use our **Next.js Web Application**, the AI reasoning and "brain" (Agent) are running on our servers. It connects back to your machine via a secure **SSE (Server-Sent Events) Tunnel**.
-2.  **Your Machine**: 
-    *   **OpenDia MCP Server**: Runs locally as a lightweight "bridge." It waits for commands from either the cloud agent or a local agent (like Claude Desktop).
-    *   **The Extension**: Injected into your Chrome browser. It maintains a **WebSocket** connection to the local server, staying ready to execute commands in any tab.
-3.  **Human Interaction Points**:
-    *   **Web App**: You chat with the remote agent to give high-level instructions.
-    *   **Extension Sidebar**: You use this for native manual controls, monitoring agent actions, or providing instant feedback (HIIL).
-4.  **Shared Reality Execution**: Whether triggered from the cloud or your terminal, actions happen in your **real Chrome instance**. This means the agent uses your actual browser sessions, cookies, and local data—no separate bot environment or fragile proxying required.
+**Note**: For auto-tunneling to work, you need ngrok installed:
 
----
+**macOS:**
+```bash
+brew install ngrok
+```
+
+**Windows:**
+```bash
+# Using Chocolatey
+choco install ngrok
+
+# Or download from https://ngrok.com/download
+```
+
+**Linux:**
+```bash
+# Ubuntu/Debian
+curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
+sudo apt update && sudo apt install ngrok
+
+# Or download from https://ngrok.com/download
+```
+
+Then get your free authtoken from https://dashboard.ngrok.com/get-started/your-authtoken and run:
+```bash
+ngrok config add-authtoken YOUR_TOKEN_HERE
+```
+
+## 🛠️ Capabilities
+
+OpenDia gives AI models **18 powerful browser tools**:
+
+### 🎯 Smart Page Understanding
+- **Analyze any webpage** - AI automatically finds buttons, forms, and interactive elements
+- **Extract content intelligently** - Get clean text from articles, social posts, or search results
+- **Understand context** - AI knows what type of page it's looking at and how to interact with it
+
+### 🖱️ Natural Interactions  
+- **Click anything** - Buttons, links, menus - AI finds and clicks the right elements
+- **Fill forms smartly** - Works even on complex sites like Twitter, LinkedIn, Facebook
+- **Navigate seamlessly** - Go to pages, scroll, wait for content to load
+- **Handle modern web apps** - Bypasses detection on social platforms
+
+### 📑 Tab & Window Management
+- **Multi-tab workflows** - Open, close, switch between tabs automatically
+- **Organize your workspace** - Let AI manage your browser tabs efficiently
+- **Coordinate complex tasks** - Work across multiple sites simultaneously
+
+### 📊 Access Your Browser Data
+- **Bookmarks & History** - Find that article you read last week
+- **Current page content** - Get selected text, links, or full page content
+- **Real-time information** - Work with whatever's currently on your screen
+
+### 🛡️ Anti-Detection Features
+- **Social media posting** - Bypass automation detection on Twitter/X, LinkedIn, Facebook
+- **Natural interactions** - Mimics human behavior to avoid triggering security measures
+- **Reliable automation** - Works consistently even on sites that block typical automation tools
+
+### 🎨 Page Styling & Customization
+- **Transform any website** - Apply fun themes, custom colors, and visual effects
+- **Preset themes** - Dark hacker, retro 80s, rainbow party, minimalist zen, and more
+- **AI mood styling** - Describe a mood and get matching visual design
+- **Interactive effects** - Matrix rain, floating particles, neon glow, and cursor trails
+- **Accessibility themes** - High contrast and readable designs for better visibility
+
+## 💬 Example Prompts to Try
+
+Once everything is set up, try asking your AI:
+
+**Content Creation:**
+> *"Read the article on this page and create a Twitter thread summarizing the main points"*
+
+**Research & Analysis:**
+> *"Look through my browser history from this week and find articles about machine learning. Summarize the key trends."*
+
+**Social Media Management:**
+> *"Check my Twitter bookmarks and organize them into categories. Create a summary of each category."*
+
+**Productivity:**
+> *"Open tabs for my usual morning reading sites and give me a briefing of today's top stories"*
+
+**Development Testing:**
+> *"Fill out this contact form with test data and check if the submission works properly"*
+
+**Personal Assistant:**
+> *"Find that GitHub repo I was looking at yesterday about React components and bookmark it for later"*
+
+**Page Styling & Fun:**
+> *"Apply a dark hacker theme to this page to make it look more interesting"*
+
+> *"Make this boring documentation page feel like a cozy coffee shop"*
+
+> *"Add some matrix rain effects to this page for 30 seconds for a cool screenshot"*
+
+> *"Transform this page with a high contrast theme for better readability"*
+
+## 🏗️ How It Works
+
+```mermaid
+graph LR
+    A[AI Model] --> B[OpenDia Server]
+    B --> C[Browser Extension]
+    C --> D[Your Browser]
+    D --> E[Any Website]
+```
+
+1. **You ask** your AI to do something browser-related
+2. **AI calls** OpenDia tools to understand and interact with pages
+3. **OpenDia controls** your browser through the extension
+4. **You get results** - AI can see what happened and respond intelligently
 
 ## 🔒 Security & Privacy
 
-- **100% Local**: No cloud processing of your browsing data, cookies, or history.
-- **User Controlled**: The extension only acts when triggered by an MCP request you authorized.
-- **Transparent**: Open-source and auditable. No telemetry or tracking.
+**Your data stays private**:
+- ✅ **Everything runs locally** - No cloud processing of your browsing data
+- ✅ **You control access** - Extension only works when you want it to
+- ✅ **Open source** - Full transparency of what the code does
+- ✅ **No tracking** - We don't collect or store any of your information
 
----
+**Important**: This tool requires broad browser permissions to function. Only use with AI models you trust, and in environments where you're comfortable with browser automation.
 
-## 🤝 Contributing & Roadmap
+## 🤝 Contributing
 
-See [VISION.md](./VISION.md) for philosophy and [ROADMAP.md](./ROADMAP.md) for upcoming features.
+Love to have your help making OpenDia better!
 
-**Development Setup:**
+### Quick Development Setup
 ```bash
-git clone https://github.com/rothnic/opendia.git
-cd opendia/opendia-mcp && npm install && npm start
-# Load extension from opendia-extension/dist/chrome
+git clone https://github.com/aaronjmars/opendia.git
+cd opendia
+
+# Start the server
+cd opendia-mcp
+npm install
+npm start
+
+# Load extension in your browser  
+# Chrome: Go to chrome://extensions/ → Developer mode → Load unpacked: ./opendia-extension/dist/chrome
+# Firefox: Go to about:debugging#/runtime/this-firefox → Load Temporary Add-on → ./opendia-extension/dist/firefox/manifest.json
+# Extension will auto-connect to server on localhost:5555
 ```
 
-**License:** MIT - see [LICENSE](LICENSE) for details.
+### Ways to Contribute
+- 🐛 **Report bugs** via [GitHub Issues](https://github.com/aaronjmars/opendia/issues)
+- 💡 **Share it on social medias**
+- 🔧 **Add new browser capabilities** 
+- 📖 **Improve documentation**
+- 🧪 **Test with different AI models**
+
+## 📝 License
+
+MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
-### 📺 System Overview (Upstream Preview)
-![OpenDia Preview](./assets/preview.gif)
+**Ready to supercharge your browser with AI? Get started with `npx opendia`! 🚀**

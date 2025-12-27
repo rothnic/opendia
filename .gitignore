@@ -137,15 +137,4 @@ dist
 .yarn/unplugged
 .yarn/build-state.yml
 .yarn/install-state.gz
-.pnp.*tests/page-structure/.chrome-user-data-comprehensive
-tests/page-structure/.chrome-user-data-modes
-tests/page-structure/.chrome-user-data-format
-
-**/.chrome-user-data*
-tests/page-structure/.chrome-user-data*
-
-# Videos
-*.webm
-*.mp4
-*.mov
-videos/
+.pnp.*

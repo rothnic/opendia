@@ -17,13 +17,8 @@
     "webNavigation",
     "notifications",
     "bookmarks",
-    "history",
-    "alarms",
-    "sidePanel"
+    "history"
   ],
-  "side_panel": {
-    "default_path": "src/sidepanel/sidepanel.html"
-  },
   "host_permissions": [
     "<all_urls>"
   ],

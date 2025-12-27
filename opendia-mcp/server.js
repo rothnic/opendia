@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-const WebSocket = require('ws');
-const express = require('express');
+const WebSocket = require("ws");
+const express = require("express");
 const net = require('net');
 const { exec } = require('child_process');
 
@@ -22,20 +22,12 @@ const httpPortArg = args.find(arg => arg.startsWith('--http-port='));
 const portArg = args.find(arg => arg.startsWith('--port='));
 
 // Default ports (changed from 3000/3001 to 5555/5556)
-let WS_PORT = wsPortArg
-  ? parseInt(wsPortArg.split('=')[1])
-  : portArg
-    ? parseInt(portArg.split('=')[1])
-    : 5555;
-let HTTP_PORT = httpPortArg
-  ? parseInt(httpPortArg.split('=')[1])
-  : portArg
-    ? parseInt(portArg.split('=')[1]) + 1
-    : 5556;
+let WS_PORT = wsPortArg ? parseInt(wsPortArg.split('=')[1]) : (portArg ? parseInt(portArg.split('=')[1]) : 5555);
+let HTTP_PORT = httpPortArg ? parseInt(httpPortArg.split('=')[1]) : (portArg ? parseInt(portArg.split('=')[1]) + 1 : 5556);
 
 // Port conflict detection utilities
 async function checkPortInUse(port) {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     const server = net.createServer();
     server.listen(port, () => {
       server.once('close', () => resolve(false));
@@ -46,21 +38,20 @@ async function checkPortInUse(port) {
 }
 
 async function checkIfOpenDiaProcess(port) {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     exec(`lsof -ti:${port}`, (error, stdout) => {
       if (error || !stdout.trim()) {
         resolve(false);
         return;
       }
-
+      
       const pid = stdout.trim().split('\n')[0];
       exec(`ps -p ${pid} -o command=`, (psError, psOutput) => {
-        resolve(
-          !psError &&
-            (psOutput.includes('opendia') ||
-              psOutput.includes('server.js') ||
-              (psOutput.includes('node') && psOutput.includes('opendia')))
-        );
+        resolve(!psError && (
+          psOutput.includes('opendia') || 
+          psOutput.includes('server.js') ||
+          psOutput.includes('node') && psOutput.includes('opendia')
+        ));
       });
     });
   });
@@ -70,8 +61,7 @@ async function findAvailablePort(startPort) {
   let port = startPort;
   while (await checkPortInUse(port)) {
     port++;
-    if (port > startPort + 100) {
-      // Safety limit
+    if (port > startPort + 100) { // Safety limit
       throw new Error(`Could not find available port after checking ${port - startPort} ports`);
     }
   }
@@ -79,20 +69,20 @@ async function findAvailablePort(startPort) {
 }
 
 async function killExistingOpenDia(port) {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     exec(`lsof -ti:${port}`, async (error, stdout) => {
       if (error || !stdout.trim()) {
         resolve(false);
         return;
       }
-
+      
       const pids = stdout.trim().split('\n');
       let killedAny = false;
-
+      
       for (const pid of pids) {
         const isOpenDia = await checkIfOpenDiaProcess(port);
         if (isOpenDia) {
-          exec(`kill ${pid}`, killError => {
+          exec(`kill ${pid}`, (killError) => {
             if (!killError) {
               console.error(`🔧 Killed existing OpenDia process (PID: ${pid})`);
               killedAny = true;
@@ -100,7 +90,7 @@ async function killExistingOpenDia(port) {
           });
         }
       }
-
+      
       // Wait a moment for processes to fully exit
       setTimeout(() => resolve(killedAny), 1000);
     });
@@ -109,32 +99,30 @@ async function killExistingOpenDia(port) {
 
 async function handlePortConflict(port, portName) {
   const isInUse = await checkPortInUse(port);
-
+  
   if (!isInUse) {
     return port; // Port is free, use it
   }
-
+  
   // Port is busy - give user options
   console.error(`⚠️  ${portName} port ${port} is already in use`);
-
+  
   // Check if it's likely another OpenDia instance
   const isOpenDia = await checkIfOpenDiaProcess(port);
-
+  
   if (isOpenDia) {
-    console.error(
-      `🔍 Detected existing OpenDia instance on port ${port} (this should not happen after cleanup)`
-    );
+    console.error(`🔍 Detected existing OpenDia instance on port ${port} (this should not happen after cleanup)`);
     console.error(`⚠️  Attempting to kill remaining process...`);
     await killExistingOpenDia(port);
     await new Promise(resolve => setTimeout(resolve, 1000));
-
+    
     // Check if port is now free
     const stillInUse = await checkPortInUse(port);
     if (!stillInUse) {
       console.error(`✅ Port ${port} is now available`);
       return port;
     }
-
+    
     // If still in use, find alternative port
     const altPort = await findAvailablePort(port + 1);
     console.error(`🔄 Port ${port} still busy, using port ${altPort}`);
@@ -166,36 +154,12 @@ let availableTools = [];
 // Tool call tracking
 const pendingCalls = new Map();
 
-// SSE client management
-const sseClients = new Set();
-
-// SSE response function for MCP messages
-function sseRespond(id, payload) {
-  const json = JSON.stringify({ jsonrpc: '2.0', id, ...payload });
-  console.error(`SSE responding to id=${id}, clients=${sseClients.size}`);
-
-  let sentCount = 0;
-  for (const client of sseClients) {
-    try {
-      client.res.write(`event: message\n`);
-      client.res.write(`data: ${json}\n\n`);
-      if (client.res.flush) client.res.flush();
-      sentCount++;
-    } catch (error) {
-      // Remove dead client
-      console.error(`SSE client send failed, removing`);
-      sseClients.delete(client);
-    }
-  }
-  console.error(`SSE response sent to ${sentCount} clients`);
-}
-
 // Simple MCP protocol implementation over stdio
 async function handleMCPRequest(request) {
   const { method, params, id } = request;
 
   // Handle notifications (no id means it's a notification)
-  if (!id && method && method.startsWith('notifications/')) {
+  if (!id && method && method.startsWith("notifications/")) {
     console.error(`Received notification: ${method}`);
     return null; // No response needed for notifications
   }
@@ -209,28 +173,31 @@ async function handleMCPRequest(request) {
     let result;
 
     switch (method) {
-      case 'initialize':
+      case "initialize":
         // RESPOND IMMEDIATELY - don't wait for extension
-        console.error(`MCP client initializing: ${params?.clientInfo?.name || 'unknown'}`);
+        console.error(
+          `MCP client initializing: ${params?.clientInfo?.name || "unknown"}`
+        );
         result = {
-          protocolVersion: params?.protocolVersion || '2024-11-05', // Echo client version
+          protocolVersion: "2024-11-05",
           capabilities: {
-            tools: {}
+            tools: {},
           },
           serverInfo: {
-            name: 'browser-mcp-server',
-            version: '2.0.0'
+            name: "browser-mcp-server",
+            version: "2.0.0",
           },
           instructions:
-            '🎯 Enhanced browser automation with anti-detection bypass for Twitter/X, LinkedIn, Facebook. Extension may take a moment to connect.'
+            "🎯 Enhanced browser automation with anti-detection bypass for Twitter/X, LinkedIn, Facebook. Extension may take a moment to connect.",
         };
         break;
 
-      case 'tools/list':
+      case "tools/list":
         // Debug logging
         console.error(
           `Tools/list called. Extension connected: ${
-            chromeExtensionSocket && chromeExtensionSocket.readyState === WebSocket.OPEN
+            chromeExtensionSocket &&
+            chromeExtensionSocket.readyState === WebSocket.OPEN
           }, Available tools: ${availableTools.length}`
         );
 
@@ -240,39 +207,47 @@ async function handleMCPRequest(request) {
           chromeExtensionSocket.readyState === WebSocket.OPEN &&
           availableTools.length > 0
         ) {
-          console.error(`Returning ${availableTools.length} tools from extension`);
+          console.error(
+            `Returning ${availableTools.length} tools from extension`
+          );
           result = {
-            tools: availableTools.map(tool => ({
+            tools: availableTools.map((tool) => ({
               name: tool.name,
               description: tool.description,
-              inputSchema: tool.inputSchema
-            }))
+              inputSchema: tool.inputSchema,
+            })),
           };
         } else {
           // Return basic fallback tools
-          console.error('Extension not connected, returning fallback tools');
+          console.error("Extension not connected, returning fallback tools");
           result = {
-            tools: getFallbackTools()
+            tools: getFallbackTools(),
           };
         }
         break;
 
-      case 'tools/call':
-        if (!chromeExtensionSocket || chromeExtensionSocket.readyState !== WebSocket.OPEN) {
+      case "tools/call":
+        if (
+          !chromeExtensionSocket ||
+          chromeExtensionSocket.readyState !== WebSocket.OPEN
+        ) {
           // Extension not connected - return helpful error
           result = {
             content: [
               {
-                type: 'text',
-                text: "❌ Browser Extension not connected. Please install and activate the browser extension, then try again.\n\nSetup instructions:\n\nFor Chrome: \n1. Go to chrome://extensions/\n2. Enable Developer mode\n3. Click 'Load unpacked' and select the Chrome extension folder\n\nFor Firefox:\n1. Go to about:debugging#/runtime/this-firefox\n2. Click 'Load Temporary Add-on...'\n3. Select the manifest-firefox.json file\n\n🎯 Features: Anti-detection bypass for Twitter/X, LinkedIn, Facebook + universal automation"
-              }
+                type: "text",
+                text: "❌ Browser Extension not connected. Please install and activate the browser extension, then try again.\n\nSetup instructions:\n\nFor Chrome: \n1. Go to chrome://extensions/\n2. Enable Developer mode\n3. Click 'Load unpacked' and select the Chrome extension folder\n\nFor Firefox:\n1. Go to about:debugging#/runtime/this-firefox\n2. Click 'Load Temporary Add-on...'\n3. Select the manifest-firefox.json file\n\n🎯 Features: Anti-detection bypass for Twitter/X, LinkedIn, Facebook + universal automation",
+              },
             ],
-            isError: true
+            isError: true,
           };
         } else {
           // Extension connected - try the tool call
           try {
-            const toolResult = await callBrowserTool(params.name, params.arguments || {});
+            const toolResult = await callBrowserTool(
+              params.name,
+              params.arguments || {}
+            );
 
             // Format response based on tool type
             const formattedResult = formatToolResult(params.name, toolResult);
@@ -280,108 +255,107 @@ async function handleMCPRequest(request) {
             result = {
               content: [
                 {
-                  type: 'text',
-                  text: formattedResult
-                }
+                  type: "text",
+                  text: formattedResult,
+                },
               ],
-              isError: false
+              isError: false,
             };
           } catch (error) {
             result = {
               content: [
                 {
-                  type: 'text',
-                  text: `❌ Tool execution failed: ${error.message}`
-                }
+                  type: "text",
+                  text: `❌ Tool execution failed: ${error.message}`,
+                },
               ],
-              isError: true
+              isError: true,
             };
           }
         }
         break;
 
-      case 'resources/list':
+      case "resources/list":
         // Return empty resources list
         result = { resources: [] };
         break;
 
-      case 'prompts/list':
+      case "prompts/list":
         // Return available workflow prompts
-        result = {
+        result = { 
           prompts: [
             {
-              name: 'post_to_social',
-              description: 'Post content to social media platforms with anti-detection bypass',
+              name: "post_to_social",
+              description: "Post content to social media platforms with anti-detection bypass",
               arguments: [
                 {
-                  name: 'content',
-                  description: 'The content to post',
+                  name: "content",
+                  description: "The content to post",
                   required: true
                 },
                 {
-                  name: 'platform',
-                  description: 'Target platform (twitter, linkedin, facebook)',
+                  name: "platform",
+                  description: "Target platform (twitter, linkedin, facebook)",
                   required: false
                 }
               ]
             },
             {
-              name: 'post_selected_quote',
-              description: 'Post currently selected text as a quote with commentary',
+              name: "post_selected_quote",
+              description: "Post currently selected text as a quote with commentary",
               arguments: [
                 {
-                  name: 'commentary',
-                  description: 'Your commentary on the selected text',
+                  name: "commentary",
+                  description: "Your commentary on the selected text",
                   required: false
                 }
               ]
             },
             {
-              name: 'research_workflow',
-              description: 'Research a topic using current page and bookmarking findings',
+              name: "research_workflow",
+              description: "Research a topic using current page and bookmarking findings",
               arguments: [
                 {
-                  name: 'topic',
-                  description: 'Research topic or query',
+                  name: "topic",
+                  description: "Research topic or query",
                   required: true
                 },
                 {
-                  name: 'depth',
-                  description: 'Research depth: quick, thorough, comprehensive',
+                  name: "depth",
+                  description: "Research depth: quick, thorough, comprehensive",
                   required: false
                 }
               ]
             },
             {
-              name: 'analyze_browsing_session',
-              description: 'Analyze current browsing session and provide insights',
+              name: "analyze_browsing_session",
+              description: "Analyze current browsing session and provide insights",
               arguments: [
                 {
-                  name: 'focus',
-                  description: 'Analysis focus: productivity, research, trends',
+                  name: "focus",
+                  description: "Analysis focus: productivity, research, trends",
                   required: false
                 }
               ]
             },
             {
-              name: 'organize_tabs',
-              description: 'Organize and clean up browser tabs intelligently',
+              name: "organize_tabs",
+              description: "Organize and clean up browser tabs intelligently",
               arguments: [
                 {
-                  name: 'strategy',
-                  description:
-                    'Organization strategy: close_duplicates, group_by_domain, archive_old',
+                  name: "strategy",
+                  description: "Organization strategy: close_duplicates, group_by_domain, archive_old",
                   required: false
                 }
               ]
             },
             {
-              name: 'fill_form_assistant',
-              description: 'Analyze and help fill out forms on the current page',
+              name: "fill_form_assistant",
+              description: "Analyze and help fill out forms on the current page",
               arguments: [
                 {
-                  name: 'form_type',
-                  description: 'Type of form: contact, registration, survey, application',
+                  name: "form_type",
+                  description: "Type of form: contact, registration, survey, application",
                   required: false
                 }
               ]
@@ -390,40 +364,40 @@ async function handleMCPRequest(request) {
         };
         break;
 
-      case 'prompts/get': {
+      case "prompts/get":
         // Execute specific workflow based on prompt name
         const promptName = params.name;
         const promptArgs = params.arguments || {};
-
+        
         try {
           let workflowResult;
           switch (promptName) {
-            case 'post_to_social':
+            case "post_to_social":
               workflowResult = await executePostToSocialWorkflow(promptArgs);
               break;
-            case 'post_selected_quote':
+            case "post_selected_quote":
               workflowResult = await executePostSelectedQuoteWorkflow(promptArgs);
               break;
-            case 'research_workflow':
+            case "research_workflow":
               workflowResult = await executeResearchWorkflow(promptArgs);
               break;
-            case 'analyze_browsing_session':
+            case "analyze_browsing_session":
               workflowResult = await executeSessionAnalysisWorkflow(promptArgs);
               break;
-            case 'organize_tabs':
+            case "organize_tabs":
               workflowResult = await executeOrganizeTabsWorkflow(promptArgs);
               break;
-            case 'fill_form_assistant':
+            case "fill_form_assistant":
               workflowResult = await executeFillFormWorkflow(promptArgs);
               break;
             default:
               throw new Error(`Unknown prompt: ${promptName}`);
           }
-
+          
           result = {
             content: [
               {
-                type: 'text',
+                type: "text",
                 text: workflowResult
               }
             ]
@@ -432,7 +406,7 @@ async function handleMCPRequest(request) {
           result = {
             content: [
               {
-                type: 'text',
+                type: "text",
                 text: `❌ Workflow execution failed: ${error.message}`
               }
             ],
@@ -440,21 +414,20 @@ async function handleMCPRequest(request) {
           };
         }
         break;
-      }
 
       default:
         throw new Error(`Unknown method: ${method}`);
     }
 
-    return { jsonrpc: '2.0', id, result };
+    return { jsonrpc: "2.0", id, result };
   } catch (error) {
     return {
-      jsonrpc: '2.0',
+      jsonrpc: "2.0",
       id,
       error: {
         code: -32603,
-        message: error.message
-      }
+        message: error.message,
+      },
     };
   }
 }
@@ -464,61 +437,65 @@ function formatToolResult(toolName, result) {
   const metadata = {
     tool: toolName,
     execution_time: result.execution_time || 0,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   };
 
   switch (toolName) {
-    case 'page_analyze':
+    case "page_analyze":
       return formatPageAnalyzeResult(result, metadata);
 
-    case 'page_extract_content':
+    case "page_extract_content":
       return formatContentExtractionResult(result, metadata);
 
-    case 'element_click':
+    case "element_click":
       return formatElementClickResult(result, metadata);
 
-    case 'element_fill':
+    case "element_fill":
       return formatElementFillResult(result, metadata);
 
-    case 'page_navigate':
+    case "page_navigate":
       return `✅ Successfully navigated to: ${
-        result.url || 'unknown URL'
+        result.url || "unknown URL"
       }\n\n${JSON.stringify(metadata, null, 2)}`;
 
-    case 'page_wait_for':
+    case "page_wait_for":
       return (
-        `✅ Condition met: ${result.condition_type || 'unknown'}\n` +
-        `Wait time: ${result.wait_time || 0}ms\n\n${JSON.stringify(metadata, null, 2)}`
+        `✅ Condition met: ${result.condition_type || "unknown"}\n` +
+        `Wait time: ${result.wait_time || 0}ms\n\n${JSON.stringify(
+          metadata,
+          null,
+          2
+        )}`
       );
 
-    case 'get_history':
+    case "get_history":
       return formatHistoryResult(result, metadata);
 
-    case 'get_selected_text':
+    case "get_selected_text":
       return formatSelectedTextResult(result, metadata);
 
-    case 'page_scroll':
+    case "page_scroll":
       return formatScrollResult(result, metadata);
 
-    case 'get_page_links':
+    case "get_page_links":
       return formatLinksResult(result, metadata);
 
-    case 'tab_create':
+    case "tab_create":
       return formatTabCreateResult(result, metadata);
 
-    case 'tab_close':
+    case "tab_close":
       return formatTabCloseResult(result, metadata);
 
-    case 'tab_list':
+    case "tab_list":
       return formatTabListResult(result, metadata);
 
-    case 'tab_switch':
+    case "tab_switch":
       return formatTabSwitchResult(result, metadata);
 
-    case 'element_get_state':
+    case "element_get_state":
       return formatElementStateResult(result, metadata);
 
-    case 'page_style':
+    case "page_style":
       return formatPageStyleResult(result, metadata);
 
     default:
@@ -531,23 +508,23 @@ function formatPageAnalyzeResult(result, metadata) {
   if (result.elements && result.elements.length > 0) {
     const platformInfo = result.summary?.anti_detection_platform
       ? `\n🎯 Anti-detection platform detected: ${result.summary.anti_detection_platform}`
-      : '';
+      : "";
 
     const summary =
       `Found ${result.elements.length} relevant elements using ${result.method}:${platformInfo}\n\n` +
       result.elements
-        .map(el => {
-          const readyStatus = el.ready ? '✅ Ready' : '⚠️ Not ready';
-          const stateInfo = el.state === 'disabled' ? ' (disabled)' : '';
+        .map((el) => {
+          const readyStatus = el.ready ? "✅ Ready" : "⚠️ Not ready";
+          const stateInfo = el.state === "disabled" ? " (disabled)" : "";
           return `• ${el.name} (${el.type}) - Confidence: ${el.conf}% ${readyStatus}${stateInfo}\n  Element ID: ${el.id}`;
         })
-        .join('\n\n');
+        .join("\n\n");
     return `${summary}\n\n${JSON.stringify(metadata, null, 2)}`;
   } else {
-    const intentHint = result.intent_hint || 'unknown';
+    const intentHint = result.intent_hint || "unknown";
     const platformInfo = result.summary?.anti_detection_platform
       ? `\nPlatform: ${result.summary.anti_detection_platform}`
-      : '';
+      : "";
     return `No relevant elements found for intent: "${intentHint}"${platformInfo}\n\n${JSON.stringify(
       metadata,
       null,
@@ -563,10 +540,10 @@ function formatContentExtractionResult(result, metadata) {
     // If it's a content object with properties, show full content
     // If it's a string or small content, it's probably summarized
     let preview;
-    if (typeof result.content === 'string') {
+    if (typeof result.content === "string") {
       // String content - likely summarized, keep truncation
-      preview = result.content.substring(0, 500) + (result.content.length > 500 ? '...' : '');
-    } else if (result.content && typeof result.content === 'object') {
+      preview = result.content.substring(0, 500) + (result.content.length > 500 ? "..." : "");
+    } else if (result.content && typeof result.content === "object") {
       // Object content - check if it's full content extraction
       if (result.content.content && result.content.content.length > 1000) {
         // This looks like full content extraction - don't truncate
@@ -579,20 +556,35 @@ function formatContentExtractionResult(result, metadata) {
       // Fallback
       preview = JSON.stringify(result.content, null, 2).substring(0, 500);
     }
-
-    return `${contentSummary}${preview}\n\n${JSON.stringify(metadata, null, 2)}`;
+    
+    return `${contentSummary}${preview}\n\n${JSON.stringify(
+      metadata,
+      null,
+      2
+    )}`;
   } else if (result.summary) {
     // Enhanced summarized content response
-    const summaryText = formatContentSummary(result.summary, result.content_type);
-    return `${contentSummary}${summaryText}\n\n${JSON.stringify(metadata, null, 2)}`;
+    const summaryText = formatContentSummary(
+      result.summary,
+      result.content_type
+    );
+    return `${contentSummary}${summaryText}\n\n${JSON.stringify(
+      metadata,
+      null,
+      2
+    )}`;
   } else {
-    return `${contentSummary}No content found\n\n${JSON.stringify(metadata, null, 2)}`;
+    return `${contentSummary}No content found\n\n${JSON.stringify(
+      metadata,
+      null,
+      2
+    )}`;
   }
 }
 
 function formatContentSummary(summary, contentType) {
   switch (contentType) {
-    case 'article':
+    case "article":
       return (
         `📰 Article: "${summary.title}"\n` +
         `📝 Word count: ${summary.word_count}\n` +
@@ -601,17 +593,19 @@ function formatContentSummary(summary, contentType) {
         `Preview: ${summary.preview}`
       );
 
-    case 'search_results':
+    case "search_results":
       return (
         `🔍 Search Results Summary:\n` +
         `📊 Total results: ${summary.total_results}\n` +
         `🏆 Quality score: ${summary.quality_score}/100\n` +
         `📈 Average relevance: ${Math.round(summary.avg_score * 100)}%\n` +
-        `🌐 Top domains: ${summary.top_domains?.map(d => d.domain).join(', ')}\n` +
-        `📝 Result types: ${summary.result_types?.join(', ')}`
+        `🌐 Top domains: ${summary.top_domains
+          ?.map((d) => d.domain)
+          .join(", ")}\n` +
+        `📝 Result types: ${summary.result_types?.join(", ")}`
       );
 
-    case 'posts':
+    case "posts":
       return (
         `📱 Social Posts Summary:\n` +
         `📊 Post count: ${summary.post_count}\n` +
@@ -619,7 +613,7 @@ function formatContentSummary(summary, contentType) {
         `❤️ Total engagement: ${summary.engagement_total}\n` +
         `🖼️ Posts with media: ${summary.has_media_count}\n` +
         `👥 Unique authors: ${summary.authors}\n` +
-        `📋 Post types: ${summary.post_types?.join(', ')}`
+        `📋 Post types: ${summary.post_types?.join(", ")}`
       );
 
     default:
@@ -629,27 +623,33 @@ function formatContentSummary(summary, contentType) {
 
 function formatElementClickResult(result, metadata) {
   return (
-    `✅ Successfully clicked element: ${result.element_name || result.element_id}\n` +
-    `Click type: ${result.click_type || 'left'}\n\n${JSON.stringify(metadata, null, 2)}`
+    `✅ Successfully clicked element: ${
+      result.element_name || result.element_id
+    }\n` +
+    `Click type: ${result.click_type || "left"}\n\n${JSON.stringify(
+      metadata,
+      null,
+      2
+    )}`
   );
 }
 
 function formatElementFillResult(result, metadata) {
   // Enhanced formatting for anti-detection bypass methods
   const methodEmojis = {
-    twitter_direct_bypass: '🐦 Twitter Direct Bypass',
-    linkedin_direct_bypass: '💼 LinkedIn Direct Bypass',
-    facebook_direct_bypass: '📘 Facebook Direct Bypass',
-    generic_direct_bypass: '🎯 Generic Direct Bypass',
-    standard_fill: '🔧 Standard Fill',
-    anti_detection_bypass: '🛡️ Anti-Detection Bypass'
+    twitter_direct_bypass: "🐦 Twitter Direct Bypass",
+    linkedin_direct_bypass: "💼 LinkedIn Direct Bypass",
+    facebook_direct_bypass: "📘 Facebook Direct Bypass",
+    generic_direct_bypass: "🎯 Generic Direct Bypass",
+    standard_fill: "🔧 Standard Fill",
+    anti_detection_bypass: "🛡️ Anti-Detection Bypass",
   };
 
   const methodDisplay = methodEmojis[result.method] || result.method;
-  const successIcon = result.success ? '✅' : '❌';
+  const successIcon = result.success ? "✅" : "❌";
 
   let fillResult = `${successIcon} Element fill ${
-    result.success ? 'completed' : 'failed'
+    result.success ? "completed" : "failed"
   } using ${methodDisplay}\n`;
   fillResult += `📝 Target: ${result.element_name || result.element_id}\n`;
   fillResult += `💬 Input: "${result.value}"\n`;
@@ -659,11 +659,14 @@ function formatElementFillResult(result, metadata) {
   }
 
   // Add bypass-specific information
-  if (result.method?.includes('bypass') && result.execCommand_result !== undefined) {
+  if (
+    result.method?.includes("bypass") &&
+    result.execCommand_result !== undefined
+  ) {
     fillResult += `🔧 execCommand success: ${result.execCommand_result}\n`;
   }
 
-  if (!result.success && result.method?.includes('bypass')) {
+  if (!result.success && result.method?.includes("bypass")) {
     fillResult += `\n⚠️ Direct bypass failed - page may have enhanced detection. Try refreshing the page.\n`;
   }
 
@@ -676,46 +679,38 @@ function formatHistoryResult(result, metadata) {
   }
 
   const summary = `🕒 Found ${result.history_items.length} history items (${result.metadata.total_found} total matches):\n\n`;
+  
+  const items = result.history_items.map((item, index) => {
+    const visitInfo = `Visits: ${item.visit_count}`;
+    const timeInfo = new Date(item.last_visit_time).toLocaleDateString();
+    const domainInfo = `[${item.domain}]`;
+    
+    return `${index + 1}. **${item.title}**\n   ${domainInfo} ${visitInfo} | Last: ${timeInfo}\n   URL: ${item.url}`;
+  }).join('\n\n');
 
-  const items = result.history_items
-    .map((item, index) => {
-      const visitInfo = `Visits: ${item.visit_count}`;
-      const timeInfo = new Date(item.last_visit_time).toLocaleDateString();
-      const domainInfo = `[${item.domain}]`;
-
-      return `${index + 1}. **${item.title}**\n   ${domainInfo} ${visitInfo} | Last: ${timeInfo}\n   URL: ${item.url}`;
-    })
-    .join('\n\n');
-
-  const searchSummary = result.metadata.search_params.keywords
-    ? `\n🔍 Search: "${result.metadata.search_params.keywords}"`
-    : '';
-  const dateSummary = result.metadata.search_params.date_range
-    ? `\n📅 Date range: ${result.metadata.search_params.date_range}`
-    : '';
-  const domainSummary = result.metadata.search_params.domains
-    ? `\n🌐 Domains: ${result.metadata.search_params.domains.join(', ')}`
-    : '';
-  const visitSummary =
-    result.metadata.search_params.min_visit_count > 1
-      ? `\n📊 Min visits: ${result.metadata.search_params.min_visit_count}`
-      : '';
+  const searchSummary = result.metadata.search_params.keywords ?
+    `\n🔍 Search: "${result.metadata.search_params.keywords}"` : '';
+  const dateSummary = result.metadata.search_params.date_range ?
+    `\n📅 Date range: ${result.metadata.search_params.date_range}` : '';
+  const domainSummary = result.metadata.search_params.domains ?
+    `\n🌐 Domains: ${result.metadata.search_params.domains.join(', ')}` : '';
+  const visitSummary = result.metadata.search_params.min_visit_count > 1 ?
+    `\n📊 Min visits: ${result.metadata.search_params.min_visit_count}` : '';
 
   return `${summary}${items}${searchSummary}${dateSummary}${domainSummary}${visitSummary}\n\n${JSON.stringify(metadata, null, 2)}`;
 }
 
 function formatSelectedTextResult(result, metadata) {
   if (!result.has_selection) {
-    return `📝 No text selected\n\n${result.message || 'No text is currently selected on the page'}\n\n${JSON.stringify(metadata, null, 2)}`;
+    return `📝 No text selected\n\n${result.message || "No text is currently selected on the page"}\n\n${JSON.stringify(metadata, null, 2)}`;
   }
 
-  const textPreview =
-    result.selected_text.length > 200
-      ? result.selected_text.substring(0, 200) + '...'
-      : result.selected_text;
+  const textPreview = result.selected_text.length > 200
+    ? result.selected_text.substring(0, 200) + "..."
+    : result.selected_text;
 
   let summary = `📝 Selected Text (${result.character_count} characters):\n\n"${textPreview}"`;
-
+  
   if (result.truncated) {
     summary += `\n\n⚠️ Text was truncated to fit length limit`;
   }
@@ -726,14 +721,14 @@ function formatSelectedTextResult(result, metadata) {
     summary += `\n• Word count: ${meta.word_count}`;
     summary += `\n• Line count: ${meta.line_count}`;
     summary += `\n• Position: ${Math.round(meta.position.x)}, ${Math.round(meta.position.y)}`;
-
+    
     if (meta.parent_element.tag_name) {
       summary += `\n• Parent element: <${meta.parent_element.tag_name}>`;
       if (meta.parent_element.class_name) {
         summary += ` class="${meta.parent_element.class_name}"`;
       }
     }
-
+    
     if (meta.page_info) {
       summary += `\n• Page: ${meta.page_info.title}`;
       summary += `\n• Domain: ${meta.page_info.domain}`;
@@ -745,16 +740,16 @@ function formatSelectedTextResult(result, metadata) {
 
 function formatScrollResult(result, metadata) {
   if (!result.success) {
-    return `📜 Scroll failed: ${result.error || 'Unknown error'}\n\n${JSON.stringify(metadata, null, 2)}`;
+    return `📜 Scroll failed: ${result.error || "Unknown error"}\n\n${JSON.stringify(metadata, null, 2)}`;
   }
 
   let summary = `📜 Page scrolled successfully`;
-
+  
   if (result.direction) {
     summary += ` ${result.direction}`;
   }
-
-  if (result.amount && result.amount !== 'custom') {
+  
+  if (result.amount && result.amount !== "custom") {
     summary += ` (${result.amount})`;
   } else if (result.pixels) {
     summary += ` (${result.pixels}px)`;
@@ -786,34 +781,27 @@ function formatLinksResult(result, metadata) {
   }
 
   const summary = `🔗 Found ${result.returned} links (${result.total_found} total on page):\n`;
-  const currentDomain = result.current_domain
-    ? `\n🌐 Current domain: ${result.current_domain}`
-    : '';
-
-  const linksList = result.links
-    .map((link, index) => {
-      const typeIcon = link.type === 'internal' ? '🏠' : '🌐';
-      const linkText = link.text.length > 50 ? link.text.substring(0, 50) + '...' : link.text;
-      const displayText = linkText || '[No text]';
-      const title = link.title ? `\n   Title: ${link.title}` : '';
-      const domain = link.domain ? ` [${link.domain}]` : '';
-
-      return `${index + 1}. ${typeIcon} **${displayText}**${domain}${title}\n   URL: ${link.url}`;
-    })
-    .join('\n\n');
+  const currentDomain = result.current_domain ? `\n🌐 Current domain: ${result.current_domain}` : '';
+  
+  const linksList = result.links.map((link, index) => {
+    const typeIcon = link.type === 'internal' ? '🏠' : '🌐';
+    const linkText = link.text.length > 50 ? link.text.substring(0, 50) + '...' : link.text;
+    const displayText = linkText || '[No text]';
+    const title = link.title ? `\n   Title: ${link.title}` : '';
+    const domain = link.domain ? ` [${link.domain}]` : '';
+    
+    return `${index + 1}. ${typeIcon} **${displayText}**${domain}${title}\n   URL: ${link.url}`;
+  }).join('\n\n');
 
   const filterInfo = [];
-  if (
-    result.links.some(l => l.type === 'internal') &&
-    result.links.some(l => l.type === 'external')
-  ) {
+  if (result.links.some(l => l.type === 'internal') && result.links.some(l => l.type === 'external')) {
     const internal = result.links.filter(l => l.type === 'internal').length;
     const external = result.links.filter(l => l.type === 'external').length;
     filterInfo.push(`📊 Internal: ${internal}, External: ${external}`);
   }
-
+  
   const filterSummary = filterInfo.length > 0 ? `\n${filterInfo.join('\n')}` : '';
-
+  
   return `${summary}${currentDomain}${filterSummary}\n\n${linksList}\n\n${JSON.stringify(metadata, null, 2)}`;
 }
 
@@ -821,7 +809,7 @@ function formatTabCreateResult(result, metadata) {
   // Handle batch operations
   if (result.batch_operation) {
     const { summary, created_tabs, settings_used, warnings, errors } = result;
-
+    
     let output = `🚀 Batch tab creation completed
 📊 Summary: ${summary.successful}/${summary.total_requested} tabs created successfully
 ⏱️ Execution time: ${summary.execution_time_ms}ms
@@ -907,17 +895,15 @@ ${JSON.stringify(metadata, null, 2)}`;
 🎯 Active tab: ${result.active_tab || 'None'}
 
 `;
-
-  const tabsList = result.tabs
-    .map((tab, index) => {
-      const activeIcon = tab.active ? '🟢' : '⚪';
-      const statusInfo = tab.status ? ` [${tab.status}]` : '';
-      const pinnedInfo = tab.pinned ? ' 📌' : '';
-
-      return `${index + 1}. ${activeIcon} **${tab.title}**${pinnedInfo}${statusInfo}
+  
+  const tabsList = result.tabs.map((tab, index) => {
+    const activeIcon = tab.active ? '🟢' : '⚪';
+    const statusInfo = tab.status ? ` [${tab.status}]` : '';
+    const pinnedInfo = tab.pinned ? ' 📌' : '';
+    
+    return `${index + 1}. ${activeIcon} **${tab.title}**${pinnedInfo}${statusInfo}
    🆔 ID: ${tab.id} | 🌐 ${tab.url}`;
-    })
-    .join('\n\n');
+  }).join('\n\n');
 
   return `${summary}${tabsList}
 
@@ -943,7 +929,7 @@ ${JSON.stringify(metadata, null, 2)}`;
 function formatElementStateResult(result, metadata) {
   const element = result.element_name || result.element_id || 'Unknown element';
   const state = result.state || {};
-
+  
   let summary = `🔍 Element State: ${element}
 
 📊 **Interaction Readiness**: ${state.interaction_ready ? '✅ Ready' : '❌ Not Ready'}
@@ -969,50 +955,50 @@ ${JSON.stringify(metadata, null, 2)}`;
 function formatPageStyleResult(result, metadata) {
   const successIcon = result.success ? '✅' : '❌';
   const statusText = result.success ? 'successfully applied' : 'failed to apply';
-
+  
   let summary = `🎨 Page styling ${statusText}\n\n`;
-
+  
   summary += `📄 **Operation Details:**\n`;
   summary += `• **Mode:** ${result.mode || 'Unknown'}\n`;
-
+  
   if (result.theme) {
     summary += `• **Theme:** ${result.theme}\n`;
   }
-
+  
   if (result.applied_css !== undefined) {
     summary += `• **CSS Applied:** ${result.applied_css} characters\n`;
   }
-
+  
   if (result.description) {
     summary += `• **Result:** ${result.description}\n`;
   }
-
+  
   if (result.remember_enabled) {
     summary += `• **Saved:** Style preferences saved for this domain\n`;
   }
-
+  
   if (result.effect_duration) {
     summary += `• **Effect Duration:** ${result.effect_duration} seconds\n`;
   }
-
+  
   if (result.mood) {
     summary += `• **Mood Applied:** "${result.mood}"\n`;
   }
-
+  
   if (result.intensity) {
     summary += `• **Intensity:** ${result.intensity}\n`;
   }
-
+  
   if (!result.success && result.error) {
     summary += `\n❌ **Error:** ${result.error}\n`;
   }
-
+  
   if (result.warning) {
     summary += `\n⚠️ **Warning:** ${result.warning}\n`;
   }
-
+  
   summary += `\n💡 **Tip:** Use mode="reset" to restore original page styling`;
-
+  
   return `${summary}\n\n${JSON.stringify(metadata, null, 2)}`;
 }
 
@@ -1020,203 +1006,201 @@ function formatPageStyleResult(result, metadata) {
 function getFallbackTools() {
   return [
     {
-      name: 'page_analyze',
+      name: "page_analyze",
       description:
-        '🔍 BACKGROUND TAB READY: Analyze any tab without switching! Two-phase intelligent page analysis with token efficiency optimization. Use tab_id parameter to analyze background tabs while staying on current page. (Extension required)',
+        "🔍 BACKGROUND TAB READY: Analyze any tab without switching! Two-phase intelligent page analysis with token efficiency optimization. Use tab_id parameter to analyze background tabs while staying on current page. (Extension required)",
       inputSchema: {
-        type: 'object',
+        type: "object",
         properties: {
           intent_hint: {
-            type: 'string',
-            description: 'What user wants to do: post_tweet, search, login, etc.'
+            type: "string",
+            description:
+              "What user wants to do: post_tweet, search, login, etc.",
           },
           phase: {
-            type: 'string',
-            enum: ['discover', 'detailed'],
-            default: 'discover',
-            description: "Analysis phase: 'discover' for quick scan, 'detailed' for full analysis"
-          }
+            type: "string",
+            enum: ["discover", "detailed"],
+            default: "discover",
+            description:
+              "Analysis phase: 'discover' for quick scan, 'detailed' for full analysis",
+          },
         },
-        required: ['intent_hint']
-      }
+        required: ["intent_hint"],
+      },
     },
     {
-      name: 'page_extract_content',
+      name: "page_extract_content",
       description:
-        '📄 BACKGROUND TAB READY: Extract content from any tab without switching! Perfect for analyzing multiple research tabs, articles, or pages simultaneously. Use tab_id to target specific background tabs. (Extension required)',
+        "📄 BACKGROUND TAB READY: Extract content from any tab without switching! Perfect for analyzing multiple research tabs, articles, or pages simultaneously. Use tab_id to target specific background tabs. (Extension required)",
       inputSchema: {
-        type: 'object',
+        type: "object",
         properties: {
           content_type: {
-            type: 'string',
-            enum: ['article', 'search_results', 'posts'],
-            description: 'Type of content to extract'
+            type: "string",
+            enum: ["article", "search_results", "posts"],
+            description: "Type of content to extract",
           },
           summarize: {
-            type: 'boolean',
+            type: "boolean",
             default: true,
-            description: 'Return summary instead of full content (saves tokens)'
-          }
+            description:
+              "Return summary instead of full content (saves tokens)",
+          },
         },
-        required: ['content_type']
-      }
+        required: ["content_type"],
+      },
     },
     {
-      name: 'element_click',
+      name: "element_click",
       description:
-        '🖱️ BACKGROUND TAB READY: Click elements in any tab without switching! Perform actions on background tabs while staying on current page. Use tab_id to target specific tabs. (Extension required)',
+        "🖱️ BACKGROUND TAB READY: Click elements in any tab without switching! Perform actions on background tabs while staying on current page. Use tab_id to target specific tabs. (Extension required)",
       inputSchema: {
-        type: 'object',
+        type: "object",
         properties: {
           element_id: {
-            type: 'string',
-            description: 'Element ID from page_analyze'
+            type: "string",
+            description: "Element ID from page_analyze",
           },
           click_type: {
-            type: 'string',
-            enum: ['left', 'right', 'double'],
-            default: 'left'
-          }
+            type: "string",
+            enum: ["left", "right", "double"],
+            default: "left",
+          },
         },
-        required: ['element_id']
-      }
+        required: ["element_id"],
+      },
     },
     {
-      name: 'element_fill',
+      name: "element_fill",
       description:
-        '✏️ BACKGROUND TAB READY: Fill forms in any tab without switching! Enhanced focus and event simulation for modern web apps with anti-detection bypass for Twitter/X, LinkedIn, Facebook. Use tab_id to fill forms in background tabs. (Extension required)',
+        "✏️ BACKGROUND TAB READY: Fill forms in any tab without switching! Enhanced focus and event simulation for modern web apps with anti-detection bypass for Twitter/X, LinkedIn, Facebook. Use tab_id to fill forms in background tabs. (Extension required)",
       inputSchema: {
-        type: 'object',
+        type: "object",
         properties: {
           element_id: {
-            type: 'string',
-            description: 'Element ID from page_analyze'
+            type: "string",
+            description: "Element ID from page_analyze",
           },
           value: {
-            type: 'string',
-            description: 'Text to input'
+            type: "string",
+            description: "Text to input",
           },
           clear_first: {
-            type: 'boolean',
+            type: "boolean",
             default: true,
-            description: 'Clear existing content before filling'
-          }
+            description: "Clear existing content before filling",
+          },
         },
-        required: ['element_id', 'value']
-      }
+        required: ["element_id", "value"],
+      },
     },
     {
-      name: 'page_navigate',
-      description: '🧭 Navigate to URLs with wait conditions (Extension required)',
+      name: "page_navigate",
+      description:
+        "🧭 Navigate to URLs with wait conditions (Extension required)",
       inputSchema: {
-        type: 'object',
+        type: "object",
         properties: {
-          url: { type: 'string', description: 'URL to navigate to' },
+          url: { type: "string", description: "URL to navigate to" },
           wait_for: {
-            type: 'string',
-            description: 'CSS selector to wait for after navigation'
-          }
+            type: "string",
+            description: "CSS selector to wait for after navigation",
+          },
         },
-        required: ['url']
-      }
+        required: ["url"],
+      },
     },
     {
-      name: 'page_wait_for',
-      description: '⏳ Wait for elements or conditions (Extension required)',
+      name: "page_wait_for",
+      description: "⏳ Wait for elements or conditions (Extension required)",
       inputSchema: {
-        type: 'object',
+        type: "object",
         properties: {
           condition_type: {
-            type: 'string',
-            enum: ['element_visible', 'text_present'],
-            description: 'Type of condition to wait for'
+            type: "string",
+            enum: ["element_visible", "text_present"],
+            description: "Type of condition to wait for",
           },
           selector: {
-            type: 'string',
-            description: 'CSS selector (for element_visible condition)'
+            type: "string",
+            description: "CSS selector (for element_visible condition)",
           },
           text: {
-            type: 'string',
-            description: 'Text to wait for (for text_present condition)'
-          }
+            type: "string",
+            description: "Text to wait for (for text_present condition)",
+          },
         },
-        required: ['condition_type']
-      }
+        required: ["condition_type"],
+      },
     },
     // Tab Management Tools
     {
-      name: 'tab_create',
-      description:
-        "Creates tabs. CRITICAL: For multiple identical tabs, ALWAYS use 'count' parameter! Examples: {url: 'https://x.com', count: 5} creates 5 Twitter tabs. {url: 'https://github.com', count: 10} creates 10 GitHub tabs. Single tab: {url: 'https://example.com'}. Multiple different URLs: {urls: ['url1', 'url2']}.",
+      name: "tab_create",
+      description: "Creates tabs. CRITICAL: For multiple identical tabs, ALWAYS use 'count' parameter! Examples: {url: 'https://x.com', count: 5} creates 5 Twitter tabs. {url: 'https://github.com', count: 10} creates 10 GitHub tabs. Single tab: {url: 'https://example.com'}. Multiple different URLs: {urls: ['url1', 'url2']}.",
       inputSchema: {
-        type: 'object',
+        type: "object",
         examples: [
-          { url: 'https://x.com', count: 5 }, // CORRECT: Creates 5 identical Twitter tabs in one batch
-          { url: 'https://github.com', count: 10 }, // CORRECT: Creates 10 GitHub tabs
-          {
-            urls: ['https://x.com/post1', 'https://x.com/post2', 'https://google.com']
-          }, // CORRECT: Different URLs in batch
-          { url: 'https://example.com' } // Single tab only
+          { url: "https://x.com", count: 5 },  // CORRECT: Creates 5 identical Twitter tabs in one batch
+          { url: "https://github.com", count: 10 },  // CORRECT: Creates 10 GitHub tabs 
+          { urls: ["https://x.com/post1", "https://x.com/post2", "https://google.com"] },  // CORRECT: Different URLs in batch
+          { url: "https://example.com" }  // Single tab only
         ],
         properties: {
           url: {
-            type: 'string',
-            description:
-              "Single URL to open. Can be used with 'count' to create multiple identical tabs"
+            type: "string",
+            description: "Single URL to open. Can be used with 'count' to create multiple identical tabs"
           },
           urls: {
-            type: 'array',
-            items: { type: 'string' },
-            description:
-              "PREFERRED FOR MULTIPLE URLS: Array of URLs to open ALL AT ONCE in a single batch operation. Pass ALL URLs here instead of making multiple calls! Example: ['https://x.com/post1', 'https://x.com/post2', 'https://google.com']",
+            type: "array",
+            items: { type: "string" },
+            description: "PREFERRED FOR MULTIPLE URLS: Array of URLs to open ALL AT ONCE in a single batch operation. Pass ALL URLs here instead of making multiple calls! Example: ['https://x.com/post1', 'https://x.com/post2', 'https://google.com']",
             maxItems: 100
           },
           count: {
-            type: 'number',
+            type: "number",
             default: 1,
             minimum: 1,
             maximum: 50,
-            description:
-              "REQUIRED FOR MULTIPLE IDENTICAL TABS: Set this to N to create N copies of the same URL. For '5 Twitter tabs' use count=5 with url='https://x.com'. DO NOT make 5 separate calls!"
+            description: "REQUIRED FOR MULTIPLE IDENTICAL TABS: Set this to N to create N copies of the same URL. For '5 Twitter tabs' use count=5 with url='https://x.com'. DO NOT make 5 separate calls!"
           },
           active: {
-            type: 'boolean',
+            type: "boolean",
             default: true,
-            description: 'Whether to activate the last created tab (single tab only)'
+            description: "Whether to activate the last created tab (single tab only)"
           },
           wait_for: {
-            type: 'string',
-            description: 'CSS selector to wait for after tab creation (single tab only)'
+            type: "string",
+            description: "CSS selector to wait for after tab creation (single tab only)"
           },
           timeout: {
-            type: 'number',
+            type: "number",
             default: 10000,
-            description: 'Maximum wait time per tab in milliseconds'
+            description: "Maximum wait time per tab in milliseconds"
           },
           batch_settings: {
-            type: 'object',
-            description: 'Performance control settings for batch operations',
+            type: "object",
+            description: "Performance control settings for batch operations",
             properties: {
               chunk_size: {
-                type: 'number',
+                type: "number",
                 default: 5,
                 minimum: 1,
                 maximum: 10,
-                description: 'Number of tabs to create per batch'
+                description: "Number of tabs to create per batch"
               },
               delay_between_chunks: {
-                type: 'number',
+                type: "number",
                 default: 1000,
                 minimum: 100,
                 maximum: 5000,
-                description: 'Delay between batches in milliseconds'
+                description: "Delay between batches in milliseconds"
               },
               delay_between_tabs: {
-                type: 'number',
+                type: "number",
                 default: 200,
                 minimum: 50,
                 maximum: 1000,
-                description: 'Delay between individual tabs in milliseconds'
+                description: "Delay between individual tabs in milliseconds"
               }
             }
           }
@@ -1224,445 +1208,308 @@ function getFallbackTools() {
       }
     },
     {
-      name: 'tab_close',
-      description: '❌ Close specific tab(s) by ID or close current tab (Extension required)',
+      name: "tab_close",
+      description: "❌ Close specific tab(s) by ID or close current tab (Extension required)",
       inputSchema: {
-        type: 'object',
+        type: "object",
         properties: {
           tab_id: {
-            type: 'number',
-            description: 'Specific tab ID to close (optional, closes current tab if not provided)'
+            type: "number",
+            description: "Specific tab ID to close (optional, closes current tab if not provided)"
           },
           tab_ids: {
-            type: 'array',
-            items: { type: 'number' },
-            description: 'Array of tab IDs to close multiple tabs'
+            type: "array",
+            items: { type: "number" },
+            description: "Array of tab IDs to close multiple tabs"
           }
         }
       }
     },
     {
-      name: 'tab_list',
-      description:
-        '📋 TAB DISCOVERY: Get list of all open tabs with IDs for background tab targeting! Shows content script readiness status and tab details. Essential for multi-tab workflows - use tab IDs with other tools to work on background tabs. (Extension required)',
+      name: "tab_list",
+      description: "📋 TAB DISCOVERY: Get list of all open tabs with IDs for background tab targeting! Shows content script readiness status and tab details. Essential for multi-tab workflows - use tab IDs with other tools to work on background tabs. (Extension required)",
       inputSchema: {
-        type: 'object',
+        type: "object",
         properties: {
           current_window_only: {
-            type: 'boolean',
+            type: "boolean",
             default: true,
-            description: 'Only return tabs from the current window'
+            description: "Only return tabs from the current window"
           },
           include_details: {
-            type: 'boolean',
+            type: "boolean",
             default: true,
-            description: 'Include additional tab details (title, favicon, etc.)'
+            description: "Include additional tab details (title, favicon, etc.)"
           }
         }
       }
     },
     {
-      name: 'tab_switch',
-      description: '🔄 Switch to a specific tab by ID (Extension required)',
+      name: "tab_switch",
+      description: "🔄 Switch to a specific tab by ID (Extension required)",
       inputSchema: {
-        type: 'object',
+        type: "object",
         properties: {
           tab_id: {
-            type: 'number',
-            description: 'Tab ID to switch to'
+            type: "number",
+            description: "Tab ID to switch to"
           }
         },
-        required: ['tab_id']
+        required: ["tab_id"]
       }
     },
     // Element State Tools
     {
-      name: 'element_get_state',
-      description:
-        '🔍 Get detailed state information for a specific element (disabled, clickable, etc.) (Extension required)',
+      name: "element_get_state",
+      description: "🔍 Get detailed state information for a specific element (disabled, clickable, etc.) (Extension required)",
       inputSchema: {
-        type: 'object',
+        type: "object",
         properties: {
           element_id: {
-            type: 'string',
-            description: 'Element ID from page_analyze'
+            type: "string",
+            description: "Element ID from page_analyze"
           }
         },
-        required: ['element_id']
+        required: ["element_id"]
       }
     },
     // Workspace and Reference Management Tools
     {
-      name: 'get_bookmarks',
-      description: 'Get all bookmarks or search for specific bookmarks (Extension required)',
+      name: "get_bookmarks",
+      description: "Get all bookmarks or search for specific bookmarks (Extension required)",
       inputSchema: {
-        type: 'object',
+        type: "object",
         properties: {
           query: {
-            type: 'string',
-            description: 'Search query for bookmarks (optional)'
+            type: "string",
+            description: "Search query for bookmarks (optional)"
           }
         }
       }
     },
     {
-      name: 'add_bookmark',
-      description: 'Add a new bookmark (Extension required)',
+      name: "add_bookmark",
+      description: "Add a new bookmark (Extension required)",
       inputSchema: {
-        type: 'object',
+        type: "object",
         properties: {
           title: {
-            type: 'string',
-            description: 'Title of the bookmark'
+            type: "string",
+            description: "Title of the bookmark"
           },
           url: {
-            type: 'string',
-            description: 'URL of the bookmark'
+            type: "string",
+            description: "URL of the bookmark"
           },
           parentId: {
-            type: 'string',
-            description: 'ID of the parent folder (optional)'
+            type: "string",
+            description: "ID of the parent folder (optional)"
           }
         },
-        required: ['title', 'url']
+        required: ["title", "url"]
       }
     },
     {
-      name: 'get_history',
-      description:
-        '🕒 Search browser history with comprehensive filters for finding previous work (Extension required)',
+      name: "get_history",
+      description: "🕒 Search browser history with comprehensive filters for finding previous work (Extension required)",
       inputSchema: {
-        type: 'object',
+        type: "object",
         properties: {
           keywords: {
-            type: 'string',
-            description: 'Search keywords to match in page titles and URLs'
+            type: "string",
+            description: "Search keywords to match in page titles and URLs"
           },
           start_date: {
-            type: 'string',
-            format: 'date-time',
-            description: 'Start date for history search (ISO 8601 format)'
+            type: "string",
+            format: "date-time",
+            description: "Start date for history search (ISO 8601 format)"
           },
           end_date: {
-            type: 'string',
-            format: 'date-time',
-            description: 'End date for history search (ISO 8601 format)'
+            type: "string",
+            format: "date-time",
+            description: "End date for history search (ISO 8601 format)"
           },
           domains: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'Filter by specific domains'
+            type: "array",
+            items: { type: "string" },
+            description: "Filter by specific domains"
           },
           min_visit_count: {
-            type: 'number',
+            type: "number",
             default: 1,
-            description: 'Minimum visit count threshold'
+            description: "Minimum visit count threshold"
           },
           max_results: {
-            type: 'number',
+            type: "number",
             default: 50,
             maximum: 500,
-            description: 'Maximum number of results to return'
+            description: "Maximum number of results to return"
           },
           sort_by: {
-            type: 'string',
-            enum: ['visit_time', 'visit_count', 'title'],
-            default: 'visit_time',
-            description: 'Sort results by visit time, visit count, or title'
+            type: "string",
+            enum: ["visit_time", "visit_count", "title"],
+            default: "visit_time",
+            description: "Sort results by visit time, visit count, or title"
           },
           sort_order: {
-            type: 'string',
-            enum: ['desc', 'asc'],
-            default: 'desc',
-            description: 'Sort order'
+            type: "string",
+            enum: ["desc", "asc"],
+            default: "desc",
+            description: "Sort order"
           }
         }
       }
     },
     {
-      name: 'get_selected_text',
-      description:
-        '📝 BACKGROUND TAB READY: Get selected text from any tab without switching! Perfect for collecting quotes, citations, or highlighted content from multiple research tabs simultaneously. (Extension required)',
+      name: "get_selected_text",
+      description: "📝 BACKGROUND TAB READY: Get selected text from any tab without switching! Perfect for collecting quotes, citations, or highlighted content from multiple research tabs simultaneously. (Extension required)",
       inputSchema: {
-        type: 'object',
+        type: "object",
         properties: {
           include_metadata: {
-            type: 'boolean',
+            type: "boolean",
             default: true,
-            description: 'Include metadata about the selection (element info, position, etc.)'
+            description: "Include metadata about the selection (element info, position, etc.)"
           },
           max_length: {
-            type: 'number',
+            type: "number",
             default: 10000,
-            description: 'Maximum length of text to return'
+            description: "Maximum length of text to return"
           }
         }
       }
     },
     {
-      name: 'page_scroll',
-      description:
-        '📜 BACKGROUND TAB READY: Scroll any tab without switching! Critical for long pages. Navigate through content in background tabs while staying on current page. Use tab_id to target specific tabs. (Extension required)',
+      name: "page_scroll",
+      description: "📜 BACKGROUND TAB READY: Scroll any tab without switching! Critical for long pages. Navigate through content in background tabs while staying on current page. Use tab_id to target specific tabs. (Extension required)",
       inputSchema: {
-        type: 'object',
+        type: "object",
         properties: {
           direction: {
-            type: 'string',
-            enum: ['up', 'down', 'left', 'right', 'top', 'bottom'],
-            default: 'down',
-            description: 'Direction to scroll'
+            type: "string",
+            enum: ["up", "down", "left", "right", "top", "bottom"],
+            default: "down",
+            description: "Direction to scroll"
           },
           amount: {
-            type: 'string',
-            enum: ['small', 'medium', 'large', 'page', 'custom'],
-            default: 'medium',
-            description: 'Amount to scroll'
+            type: "string",
+            enum: ["small", "medium", "large", "page", "custom"],
+            default: "medium",
+            description: "Amount to scroll"
           },
           pixels: {
-            type: 'number',
+            type: "number",
             description: "Custom pixel amount (when amount is 'custom')"
           },
           smooth: {
-            type: 'boolean',
+            type: "boolean",
             default: true,
-            description: 'Use smooth scrolling animation'
+            description: "Use smooth scrolling animation"
           },
           element_id: {
-            type: 'string',
-            description: 'Scroll to specific element (overrides direction/amount)'
+            type: "string",
+            description: "Scroll to specific element (overrides direction/amount)"
           },
           wait_after: {
-            type: 'number',
+            type: "number",
             default: 500,
-            description: 'Milliseconds to wait after scrolling'
+            description: "Milliseconds to wait after scrolling"
           }
         }
       }
     },
     {
-      name: 'get_page_links',
-      description:
-        '🔗 Get all hyperlinks on the current page with smart filtering (Extension required)',
+      name: "get_page_links",
+      description: "🔗 Get all hyperlinks on the current page with smart filtering (Extension required)",
       inputSchema: {
-        type: 'object',
+        type: "object",
         properties: {
           include_internal: {
-            type: 'boolean',
+            type: "boolean",
             default: true,
-            description: 'Include internal links (same domain)'
+            description: "Include internal links (same domain)"
           },
           include_external: {
-            type: 'boolean',
+            type: "boolean",
             default: true,
-            description: 'Include external links (different domains)'
+            description: "Include external links (different domains)"
           },
           domain_filter: {
-            type: 'string',
-            description: 'Filter links to include only specific domain(s)'
+            type: "string",
+            description: "Filter links to include only specific domain(s)"
           },
           max_results: {
-            type: 'number',
+            type: "number",
             default: 100,
             maximum: 500,
-            description: 'Maximum number of links to return'
+            description: "Maximum number of links to return"
           }
         }
       }
     },
     {
-      name: 'page_style',
-      description:
-        "🎨 Transform page appearance with themes, colors, fonts, and fun effects! Apply preset themes like 'dark_hacker', 'retro_80s', or create custom styles. Perfect for making boring pages fun or improving readability.",
+      name: "page_style",
+      description: "🎨 Transform page appearance with themes, colors, fonts, and fun effects! Apply preset themes like 'dark_hacker', 'retro_80s', or create custom styles. Perfect for making boring pages fun or improving readability.",
       inputSchema: {
-        type: 'object',
+        type: "object",
         examples: [
-          { mode: 'preset', theme: 'dark_hacker' },
-          {
-            mode: 'custom',
-            background: '#000',
-            text_color: '#00ff00',
-            font: 'monospace'
-          },
-          {
-            mode: 'ai_mood',
-            mood: 'cozy coffee shop vibes',
-            intensity: 'strong'
-          },
-          { mode: 'effect', effect: 'matrix_rain', duration: 30 }
+          { mode: "preset", theme: "dark_hacker" },
+          { mode: "custom", background: "#000", text_color: "#00ff00", font: "monospace" },
+          { mode: "ai_mood", mood: "cozy coffee shop vibes", intensity: "strong" },
+          { mode: "effect", effect: "matrix_rain", duration: 30 }
         ],
         properties: {
           mode: {
-            type: 'string',
-            enum: ['preset', 'custom', 'ai_mood', 'effect', 'reset'],
-            description: 'Styling mode to use'
+            type: "string", 
+            enum: ["preset", "custom", "ai_mood", "effect", "reset"],
+            description: "Styling mode to use"
           },
           theme: {
-            type: 'string',
-            enum: [
-              'dark_hacker',
-              'retro_80s',
-              'rainbow_party',
-              'minimalist_zen',
-              'high_contrast',
-              'cyberpunk',
-              'pastel_dream',
-              'newspaper'
-            ],
-            description: 'Preset theme name (when mode=preset)'
+            type: "string",
+            enum: ["dark_hacker", "retro_80s", "rainbow_party", "minimalist_zen", "high_contrast", "cyberpunk", "pastel_dream", "newspaper"],
+            description: "Preset theme name (when mode=preset)"
           },
-          background: {
-            type: 'string',
-            description: 'Background color/gradient'
+          background: { 
+            type: "string", 
+            description: "Background color/gradient" 
           },
-          text_color: {
-            type: 'string',
-            description: 'Text color'
+          text_color: { 
+            type: "string", 
+            description: "Text color" 
           },
-          font: {
-            type: 'string',
-            description: 'Font family'
+          font: { 
+            type: "string", 
+            description: "Font family" 
           },
-          font_size: {
-            type: 'string',
-            description: "Font size (e.g., '1.2em', '16px')"
+          font_size: { 
+            type: "string", 
+            description: "Font size (e.g., '1.2em', '16px')" 
           },
-          mood: {
-            type: 'string',
-            description: 'Describe desired mood/feeling (when mode=ai_mood)'
+          mood: { 
+            type: "string", 
+            description: "Describe desired mood/feeling (when mode=ai_mood)" 
           },
-          intensity: {
-            type: 'string',
-            enum: ['subtle', 'medium', 'strong'],
-            default: 'medium'
+          intensity: { 
+            type: "string", 
+            enum: ["subtle", "medium", "strong"], 
+            default: "medium" 
           },
-          effect: {
-            type: 'string',
-            enum: [
-              'matrix_rain',
-              'floating_particles',
-              'cursor_trail',
-              'neon_glow',
-              'typing_effect'
-            ]
+          effect: { 
+            type: "string", 
+            enum: ["matrix_rain", "floating_particles", "cursor_trail", "neon_glow", "typing_effect"] 
           },
-          duration: {
-            type: 'number',
-            description: 'Effect duration in seconds',
-            default: 10
+          duration: { 
+            type: "number", 
+            description: "Effect duration in seconds", 
+            default: 10 
           },
-          remember: {
-            type: 'boolean',
-            description: 'Remember this style for this website',
-            default: false
+          remember: { 
+            type: "boolean", 
+            description: "Remember this style for this website", 
+            default: false 
           }
         },
-        required: ['mode']
-      }
-    }
-    ,
-    {
-      name: 'file_upload',
-      description:
-        '📁 Upload a file to a file input element. Fetches file from URL (bypasses CORS) and injects into file input using DataTransfer API. Perfect for form automation like LinkedIn Easy Apply.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          file_url: {
-            type: 'string',
-            description: 'URL to fetch the file from (can be localhost, bypasses CORS)'
-          },
-          file_name: {
-            type: 'string',
-            description: 'Name for the file (e.g., "resume.pdf")'
-          },
-          file_selector: {
-            type: 'string',
-            description: 'CSS selector for the file input element (default: input[type="file"])',
-            default: 'input[type="file"]'
-          },
-          mime_type: {
-            type: 'string',
-            description: 'MIME type (auto-detected from URL if not provided)'
-          },
-          tab_id: {
-            type: 'number',
-            description: 'Target tab ID (defaults to active tab)'
-          }
-        },
-        required: ['file_url', 'file_name']
-      }
-    },
-    {
-      name: 'select_element',
-      description:
-        '🎯 INTERACTIVE SELECTION: Allows the user to select an element on the page by highlighting it (similar to DevTools). Returns the HTML of the selected element (truncated if too long) and a summary of its attributes and parent. Useful when you need the user to point out a specific element.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          tab_id: {
-            type: 'number',
-            description: 'Target tab ID (defaults to active tab)'
-          },
-          message: {
-            type: 'string',
-            description: 'Optional instruction message to display to the user during selection'
-          }
-        }
-      }
-    },
-    {
-      name: 'page_structure',
-      description:
-        '🏗️ BUILD PAGE OUTLINE: Comprehensive analysis of page structure, metadata, and repeated patterns. Returns a unified tree with unique IDs for every element, allowing precise targeting. Automatically identifies repeated groups (e.g., product lists) and generates robust selectors for scraping. Detects pagination and interactive elements.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          format: {
-            type: 'string',
-            enum: ['compact', 'json'],
-            default: 'compact',
-            description: 'Output format: compact (recommended text tree) or json'
-          },
-          include_interactive: {
-            type: 'boolean',
-            default: true,
-            description: 'Include interactive elements (buttons, links, inputs)'
-          },
-          include_structure: {
-            type: 'boolean',
-            default: true,
-            description: 'Include structural landmarks and containers'
-          },
-          include_metadata: {
-            type: 'boolean',
-            default: true,
-            description: 'Include page metadata and pagination info'
-          },
-          max_depth: {
-            type: 'number',
-            default: 8,
-            description: 'Maximum depth to traverse'
-          },
-          max_nodes: {
-            type: 'number',
-            default: 400,
-            description: 'Maximum nodes in outline'
-          },
-          max_children_per_group: {
-            type: 'number',
-            default: 6,
-            description: 'Max siblings before grouping'
-          },
-          examples_per_group: {
-            type: 'number',
-            default: 3,
-            description: 'Examples to show per group'
-          },
-          tab_id: {
-            type: 'number',
-            description: 'Target tab ID'
-          }
-        }
+        required: ["mode"]
       }
     },
   ];
@@ -1670,9 +1517,12 @@ function getFallbackTools() {
 
 // Call browser tool through Chrome/Firefox Extension
 async function callBrowserTool(toolName, args) {
-  if (!chromeExtensionSocket || chromeExtensionSocket.readyState !== WebSocket.OPEN) {
+  if (
+    !chromeExtensionSocket ||
+    chromeExtensionSocket.readyState !== WebSocket.OPEN
+  ) {
     throw new Error(
-      'Browser Extension not connected. Make sure the extension is installed and active.'
+      "Browser Extension not connected. Make sure the extension is installed and active."
     );
   }
 
@@ -1685,7 +1535,7 @@ async function callBrowserTool(toolName, args) {
       JSON.stringify({
         id: callId,
         method: toolName,
-        params: args
+        params: args,
       })
     );
 
@@ -1693,7 +1543,7 @@ async function callBrowserTool(toolName, args) {
     setTimeout(() => {
       if (pendingCalls.has(callId)) {
         pendingCalls.delete(callId);
-        reject(new Error('Tool call timeout'));
+        reject(new Error("Tool call timeout"));
       }
     }, 30000);
   });
@@ -1714,8 +1564,8 @@ function handleToolResponse(message) {
 
 // Setup WebSocket connection handlers
 function setupWebSocketHandlers() {
-  wss.on('connection', ws => {
-    console.error('Browser Extension connected');
+  wss.on("connection", (ws) => {
+    console.error("Browser Extension connected");
     chromeExtensionSocket = ws;
 
     // Set up ping/pong for keepalive
@@ -1725,85 +1575,80 @@ function setupWebSocketHandlers() {
       }
     }, 30000);
 
-    ws.on('message', data => {
+    ws.on("message", (data) => {
       try {
         const message = JSON.parse(data);
 
-        if (message.type === 'register') {
+        if (message.type === "register") {
           availableTools = message.tools;
-          console.error(`✅ Registered ${availableTools.length} browser tools from extension`);
+          console.error(
+            `✅ Registered ${availableTools.length} browser tools from extension`
+          );
           console.error(
             `🎯 Enhanced tools with anti-detection bypass: ${availableTools
-              .map(t => t.name)
-              .join(', ')}`
+              .map((t) => t.name)
+              .join(", ")}`
           );
-        } else if (message.type === 'ping') {
+        } else if (message.type === "ping") {
           // Respond to ping with pong
-          ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+          ws.send(JSON.stringify({ type: "pong", timestamp: Date.now() }));
         } else if (message.id) {
           // Handle tool response
           handleToolResponse(message);
         }
       } catch (error) {
-        console.error('Error processing message:', error);
+        console.error("Error processing message:", error);
       }
     });
 
-    ws.on('close', () => {
-      console.error('Browser Extension disconnected');
+    ws.on("close", () => {
+      console.error("Browser Extension disconnected");
       chromeExtensionSocket = null;
       availableTools = []; // Clear tools when extension disconnects
       clearInterval(pingInterval);
     });
 
-    ws.on('error', error => {
-      console.error('WebSocket error:', error);
+    ws.on("error", (error) => {
+      console.error("WebSocket error:", error);
     });
 
-    ws.on('pong', () => {
+    ws.on("pong", () => {
       // Extension is alive
     });
   });
 }
 
 // ADD: SSE/HTTP endpoints for online AI
-app
-  .route('/sse')
+app.route('/sse')
   .get((req, res) => {
-    // SSE stream for connection with improved headers
+    // SSE stream for connection
     res.writeHead(200, {
-      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
-      'X-Accel-Buffering': 'no',
+      'Connection': 'keep-alive',
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Headers': 'Cache-Control, Content-Type',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
     });
 
-    // Add client to tracking
-    const client = { res, id: Date.now() };
-    sseClients.add(client);
-    console.error(`SSE client connected (total: ${sseClients.size})`);
+    res.write(`data: ${JSON.stringify({
+      type: 'connection',
+      status: 'connected',
+      server: 'OpenDia MCP Server',
+      version: '1.0.0'
+    })}\n\n`);
 
-    // Send initial connection notice (as SSE comment)
-    res.write(`: Connected to OpenDia MCP Server v1.0.0\n\n`);
-
-    // Heartbeat to keep connection alive (as SSE comments)
+    // Heartbeat to keep connection alive
     const heartbeat = setInterval(() => {
-      try {
-        res.write(`: ping\n\n`);
-        if (res.flush) res.flush();
-      } catch (error) {
-        sseClients.delete(client);
-        clearInterval(heartbeat);
-      }
+      res.write(`data: ${JSON.stringify({
+        type: 'heartbeat',
+        timestamp: Date.now()
+      })}\n\n`);
     }, 30000);
 
     req.on('close', () => {
       clearInterval(heartbeat);
-      sseClients.delete(client);
-      console.error(`SSE client disconnected (remaining: ${sseClients.size})`);
+      console.error('SSE client disconnected');
     });
 
     console.error('SSE client connected');
@@ -1811,56 +1656,17 @@ app
   .post(async (req, res) => {
     // MCP requests from online AI
     console.error('MCP request received via SSE:', req.body);
-
+    
     try {
-      // Process the MCP request
       const result = await handleMCPRequest(req.body);
-
-      // If we have SSE clients, send on SSE stream
-      if (sseClients.size > 0) {
-        console.error(`SSE mode: sending to ${sseClients.size} clients`);
-
-        // Send the result back on SSE stream
-        if (result) {
-          if (result.result) {
-            // Success response
-            sseRespond(req.body.id, { result: result.result });
-          } else if (result.error) {
-            // Error response from handleMCPRequest
-            sseRespond(req.body.id, { error: result.error });
-          }
-        }
-
-        // HYBRID MODE: Also send in POST body for compatibility
-        // Some clients (like OpenCode?) may expect BOTH
-        const response = {
-          jsonrpc: '2.0',
-          id: req.body.id,
-          ...(result.result ? { result: result.result } : {}),
-          ...(result.error ? { error: result.error } : {})
-        };
-        res.status(200).json(response);
-      } else {
-        // No SSE clients - send response in POST body (OpenCode pattern)
-        console.error('HTTP mode: sending response in POST body');
-        const response = {
-          jsonrpc: '2.0',
-          id: req.body.id
-        };
-
-        if (result.result) {
-          response.result = result.result;
-        } else if (result.error) {
-          response.error = result.error;
-        }
-
-        res.status(200).json(response);
-      }
+      res.json({
+        jsonrpc: "2.0",
+        id: req.body.id,
+        result: result
+      });
     } catch (error) {
-      // Error response
-      console.error('Error processing MCP request:', error);
-      res.status(200).json({
-        jsonrpc: '2.0',
+      res.status(500).json({
+        jsonrpc: "2.0",
         id: req.body.id,
         error: { code: -32603, message: error.message }
       });
@@ -1876,30 +1682,30 @@ app.options('*', (req, res) => {
 });
 
 // Read from stdin
-let inputBuffer = '';
+let inputBuffer = "";
 if (!sseOnly) {
-  process.stdin.on('data', async chunk => {
+  process.stdin.on("data", async (chunk) => {
     inputBuffer += chunk.toString();
 
-    // Process complete lines
-    const lines = inputBuffer.split('\n');
-    inputBuffer = lines.pop() || '';
+  // Process complete lines
+  const lines = inputBuffer.split("\n");
+  inputBuffer = lines.pop() || "";
 
-    for (const line of lines) {
-      if (line.trim()) {
-        try {
-          const request = JSON.parse(line);
-          const response = await handleMCPRequest(request);
+  for (const line of lines) {
+    if (line.trim()) {
+      try {
+        const request = JSON.parse(line);
+        const response = await handleMCPRequest(request);
 
-          // Only send response if one was generated (not for notifications)
-          if (response) {
-            process.stdout.write(JSON.stringify(response) + '\n');
-          }
-        } catch (error) {
-          console.error('Error processing request:', error);
+        // Only send response if one was generated (not for notifications)
+        if (response) {
+          process.stdout.write(JSON.stringify(response) + "\n");
         }
+      } catch (error) {
+        console.error("Error processing request:", error);
       }
     }
+  }
   });
 }
 
@@ -1939,14 +1745,14 @@ app.get('/ports', (req, res) => {
 
 // START: Enhanced server startup with port conflict resolution
 async function startServer() {
-  console.error('🚀 Enhanced Browser MCP Server with Anti-Detection Features');
+  console.error("🚀 Enhanced Browser MCP Server with Anti-Detection Features");
   console.error(`📊 Default ports: WebSocket=${WS_PORT}, HTTP=${HTTP_PORT}`);
-
+  
   // Always kill existing OpenDia processes on startup
   console.error('🔧 Checking for existing OpenDia processes...');
   const wsKilled = await killExistingOpenDia(WS_PORT);
   const httpKilled = await killExistingOpenDia(HTTP_PORT);
-
+  
   if (wsKilled || httpKilled) {
     console.error('✅ Existing processes terminated');
     // Wait for ports to be fully released
@@ -1954,52 +1760,52 @@ async function startServer() {
   } else {
     console.error('ℹ️  No existing OpenDia processes found');
   }
-
+  
   // Resolve port conflicts
   WS_PORT = await handlePortConflict(WS_PORT, 'WebSocket');
   HTTP_PORT = await handlePortConflict(HTTP_PORT, 'HTTP');
-
+  
   // Ensure HTTP port doesn't conflict with resolved WebSocket port
   if (HTTP_PORT === WS_PORT) {
     HTTP_PORT = await findAvailablePort(WS_PORT + 1);
     console.error(`🔄 HTTP port adjusted to ${HTTP_PORT} to avoid WebSocket conflict`);
   }
-
+  
   // Initialize WebSocket server after port resolution
   wss = new WebSocket.Server({ port: WS_PORT });
-
+  
   // Set up WebSocket connection handling
   setupWebSocketHandlers();
-
+  
   console.error(`✅ Ports resolved: WebSocket=${WS_PORT}, HTTP=${HTTP_PORT}`);
-
+  
   // Start HTTP server
   const httpServer = app.listen(HTTP_PORT, () => {
     console.error(`🌐 HTTP/SSE server running on port ${HTTP_PORT}`);
     console.error(`🔌 Browser Extension connected on ws://localhost:${WS_PORT}`);
-    console.error('🎯 Features: Anti-detection bypass + intelligent automation');
+    console.error("🎯 Features: Anti-detection bypass + intelligent automation");
   });
 
   // Auto-tunnel if requested
   if (enableTunnel) {
     try {
       console.error('🔄 Starting automatic tunnel...');
-
+      
       // Use the system ngrok binary directly
       const ngrokProcess = spawn('ngrok', ['http', HTTP_PORT, '--log', 'stdout'], {
         stdio: ['ignore', 'pipe', 'pipe']
       });
-
+      
       let tunnelUrl = null;
-
+      
       // Wait for tunnel URL
       await new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
           ngrokProcess.kill();
           reject(new Error('Tunnel startup timeout'));
         }, 10000);
-
-        ngrokProcess.stdout.on('data', data => {
+        
+        ngrokProcess.stdout.on('data', (data) => {
           const output = data.toString();
           const match = output.match(/url=https:\/\/[^\s]+/);
           if (match) {
@@ -2008,8 +1814,8 @@ async function startServer() {
             resolve();
           }
         });
-
-        ngrokProcess.stderr.on('data', data => {
+        
+        ngrokProcess.stderr.on('data', (data) => {
           const error = data.toString();
           if (error.includes('error') || error.includes('failed')) {
             clearTimeout(timeout);
@@ -2017,13 +1823,13 @@ async function startServer() {
             reject(new Error(error.trim()));
           }
         });
-
-        ngrokProcess.on('error', error => {
+        
+        ngrokProcess.on('error', (error) => {
           clearTimeout(timeout);
           reject(error);
         });
       });
-
+      
       if (tunnelUrl) {
         console.error('');
         console.error('🎉 OPENDIA READY!');
@@ -2036,12 +1842,13 @@ async function startServer() {
         console.error('🏠 Local access still available:');
         console.error('🔗 http://localhost:3001/sse');
         console.error('');
-
+        
         // Store ngrok process for cleanup
         global.ngrokProcess = ngrokProcess;
       } else {
         throw new Error('Could not extract tunnel URL');
       }
+      
     } catch (error) {
       console.error('❌ Tunnel failed:', error.message);
       console.error('');
@@ -2070,7 +1877,7 @@ async function startServer() {
     console.error('💡 Claude Desktop: Works with existing config');
     console.error('💡 Online AI: Use SSE endpoint above');
   }
-
+  
   // Display port configuration help
   console.error('');
   console.error('🔧 Port Configuration:');
@@ -2097,12 +1904,12 @@ process.on('SIGINT', async () => {
 
 // Workflow execution functions
 async function executePostToSocialWorkflow(args) {
-  const { content, platform = 'auto' } = args;
-
+  const { content, platform = "auto" } = args;
+  
   if (!content) {
-    throw new Error('Content is required for social media posting');
+    throw new Error("Content is required for social media posting");
   }
-
+  
   try {
     // Analyze the current page to determine platform and find posting elements
     const pageAnalysis = await callBrowserTool('page_analyze', {
@@ -2110,77 +1917,69 @@ async function executePostToSocialWorkflow(args) {
       phase: 'discover',
       max_results: 3
     });
-
+    
     if (!pageAnalysis.elements || pageAnalysis.elements.length === 0) {
-      throw new Error(
-        'No posting elements found on current page. Please navigate to a social media platform.'
-      );
+      throw new Error("No posting elements found on current page. Please navigate to a social media platform.");
     }
-
+    
     // Find the best textarea element for posting
-    const textareaElement = pageAnalysis.elements.find(
-      el =>
-        el.type === 'textarea' ||
-        el.name.toLowerCase().includes('post') ||
-        el.name.toLowerCase().includes('tweet')
+    const textareaElement = pageAnalysis.elements.find(el => 
+      el.type === 'textarea' || el.name.toLowerCase().includes('post') || el.name.toLowerCase().includes('tweet')
     );
-
+    
     if (!textareaElement) {
-      throw new Error('No suitable posting textarea found on current page');
+      throw new Error("No suitable posting textarea found on current page");
     }
-
+    
     // Fill the content using anti-detection bypass
     const fillResult = await callBrowserTool('element_fill', {
       element_id: textareaElement.id,
       value: content,
       clear_first: true
     });
-
+    
     if (!fillResult.success) {
       throw new Error(`Failed to fill content: ${fillResult.actual_value}`);
     }
-
+    
     // Look for submit button
-    const submitElement = pageAnalysis.elements.find(
-      el =>
-        el.type === 'button' &&
-        (el.name.toLowerCase().includes('post') ||
-          el.name.toLowerCase().includes('tweet') ||
-          el.name.toLowerCase().includes('share'))
+    const submitElement = pageAnalysis.elements.find(el => 
+      el.type === 'button' && (el.name.toLowerCase().includes('post') || el.name.toLowerCase().includes('tweet') || el.name.toLowerCase().includes('share'))
     );
-
+    
     let result = `✅ Successfully posted content to social media!\n\n`;
     result += `📝 **Content posted:** "${content}"\n`;
     result += `🎯 **Platform detected:** ${pageAnalysis.summary?.anti_detection_platform || 'Generic'}\n`;
     result += `🔧 **Method used:** ${fillResult.method}\n`;
     result += `📊 **Fill success:** ${fillResult.success ? 'Yes' : 'No'}\n`;
-
+    
     if (submitElement) {
       result += `\n💡 **Next step:** Click the "${submitElement.name}" button to publish your post.`;
     } else {
       result += `\n💡 **Next step:** Look for a "Post" or "Tweet" button to publish your content.`;
     }
-
+    
     return result;
+    
   } catch (error) {
     throw new Error(`Social media posting failed: ${error.message}`);
   }
 }
 
 async function executePostSelectedQuoteWorkflow(args) {
-  const { commentary = '' } = args;
-
+  const { commentary = "" } = args;
+  
   try {
     // Get selected text from current page
     const selectedText = await callBrowserTool('get_selected_text', {
       include_metadata: true,
       max_length: 1000
     });
-
+    
     if (!selectedText.has_selection) {
-      throw new Error('No text is currently selected. Please select some text first.');
+      throw new Error("No text is currently selected. Please select some text first.");
     }
-
+    
     // Format the quote with commentary
     let quoteContent = `"${selectedText.selected_text}"`;
     if (selectedText.selection_metadata?.page_info?.title) {
@@ -2192,57 +1991,56 @@ async function executePostSelectedQuoteWorkflow(args) {
     if (commentary) {
       quoteContent += `\n\n${commentary}`;
     }
-
+    
     // Execute the post workflow with the formatted quote
-    const postResult = await executePostToSocialWorkflow({
-      content: quoteContent
-    });
-
+    const postResult = await executePostToSocialWorkflow({ content: quoteContent });
+    
     let result = `🎯 **Selected Quote Posting Workflow**\n\n`;
     result += `📝 **Selected text:** "${selectedText.selected_text.substring(0, 100)}${selectedText.selected_text.length > 100 ? '...' : ''}"\n`;
     result += `📄 **Source:** ${selectedText.selection_metadata?.page_info?.title || 'Current page'}\n`;
     result += `💬 **Commentary:** ${commentary || 'None'}\n`;
     result += `📊 **Character count:** ${quoteContent.length}\n\n`;
     result += postResult;
-
+    
     return result;
+    
   } catch (error) {
     throw new Error(`Quote posting workflow failed: ${error.message}`);
   }
 }
 
 async function executeResearchWorkflow(args) {
-  const { topic, depth = 'thorough' } = args;
-
+  const { topic, depth = "thorough" } = args;
+  
   if (!topic) {
-    throw new Error('Research topic is required');
+    throw new Error("Research topic is required");
   }
-
+  
   try {
     // Analyze current page content
     const pageContent = await callBrowserTool('page_extract_content', {
       content_type: 'article',
       summarize: true
     });
-
+    
     // Get current page links for related research
     const pageLinks = await callBrowserTool('get_page_links', {
       include_internal: true,
       include_external: true,
       max_results: 20
     });
-
+    
     // Search browsing history for related content
     const historyResults = await callBrowserTool('get_history', {
       keywords: topic,
       max_results: 10,
       sort_by: 'visit_time'
     });
-
+    
     // Bookmark current page if it has relevant content - URL will be obtained from browser extension
     const currentUrl = pageContent.content?.url;
     const currentTitle = pageContent.summary?.title;
-
+    
     if (currentUrl && currentTitle) {
       try {
         await callBrowserTool('add_bookmark', {
@@ -2253,10 +2051,10 @@ async function executeResearchWorkflow(args) {
         console.warn('Bookmark creation failed:', bookmarkError.message);
       }
     }
-
+    
     // Compile research summary
     let result = `🔍 **Research Workflow: ${topic}**\n\n`;
-
+    
     // Current page analysis
     result += `📄 **Current Page Analysis:**\n`;
     if (pageContent.summary) {
@@ -2268,24 +2066,21 @@ async function executeResearchWorkflow(args) {
         result += `• **Preview:** ${pageContent.summary.preview}\n`;
       }
     }
-
+    
     // Related links
     result += `\n🔗 **Related Links Found:** ${pageLinks.returned}\n`;
-    const relevantLinks = pageLinks.links
-      .filter(
-        link =>
-          link.text.toLowerCase().includes(topic.toLowerCase()) ||
-          link.url.toLowerCase().includes(topic.toLowerCase())
-      )
-      .slice(0, 5);
-
+    const relevantLinks = pageLinks.links.filter(link => 
+      link.text.toLowerCase().includes(topic.toLowerCase()) || 
+      link.url.toLowerCase().includes(topic.toLowerCase())
+    ).slice(0, 5);
+    
     if (relevantLinks.length > 0) {
       result += `**Top relevant links:**\n`;
       relevantLinks.forEach((link, index) => {
         result += `${index + 1}. [${link.text}](${link.url})\n`;
       });
     }
-
+    
     // History analysis
     result += `\n📚 **Previous Research:**\n`;
     if (historyResults.history_items && historyResults.history_items.length > 0) {
@@ -2297,107 +2092,95 @@ async function executeResearchWorkflow(args) {
     } else {
       result += `No previous research found in browsing history.\n`;
     }
-
+    
     // Research recommendations
     result += `\n💡 **Next Steps:**\n`;
-    if (depth === 'comprehensive') {
+    if (depth === "comprehensive") {
       result += `• Explore the ${pageLinks.returned} links found on current page\n`;
       result += `• Cross-reference with ${historyResults.metadata?.total_found || 0} historical visits\n`;
       result += `• Consider bookmarking additional relevant pages\n`;
-    } else if (depth === 'thorough') {
+    } else if (depth === "thorough") {
       result += `• Review top ${Math.min(5, pageLinks.returned)} most relevant links\n`;
       result += `• Check recent history for related content\n`;
     } else {
       result += `• Focus on current page content and top 3 related links\n`;
     }
-
+    
     result += `\n✅ **Current page bookmarked for reference**`;
-
+    
     return result;
+    
   } catch (error) {
     throw new Error(`Research workflow failed: ${error.message}`);
   }
 }
 
 async function executeSessionAnalysisWorkflow(args) {
-  const { focus = 'productivity' } = args;
-
+  const { focus = "productivity" } = args;
+  
   try {
     // Get all open tabs
     const tabList = await callBrowserTool('tab_list', {
       current_window_only: false,
       include_details: true
     });
-
+    
     // Get recent browsing history
     const recentHistory = await callBrowserTool('get_history', {
       max_results: 50,
       sort_by: 'visit_time',
       sort_order: 'desc'
     });
-
+    
     // Analyze current page
     const currentPageContent = await callBrowserTool('page_extract_content', {
       content_type: 'article',
       summarize: true
     });
-
+    
     // Process tabs data
     const tabs = tabList.tabs || [];
-    const domains = [
-      ...new Set(
-        tabs.map(tab => {
-          try {
-            return new URL(tab.url).hostname;
-          } catch {
-            return 'unknown';
-          }
-        })
-      )
-    ];
-
+    const domains = [...new Set(tabs.map(tab => {
+      try {
+        return new URL(tab.url).hostname;
+      } catch {
+        return 'unknown';
+      }
+    }))];
+    
     // Categorize tabs by domain type
-    const socialMediaDomains = [
-      'twitter.com',
-      'x.com',
-      'linkedin.com',
-      'facebook.com',
-      'instagram.com'
-    ];
+    const socialMediaDomains = ['twitter.com', 'x.com', 'linkedin.com', 'facebook.com', 'instagram.com'];
     const productivityDomains = ['docs.google.com', 'notion.so', 'obsidian.md', 'github.com'];
     const newsDomains = ['news.google.com', 'bbc.com', 'cnn.com', 'reuters.com'];
-
+    
     const categorizedTabs = {
       social: tabs.filter(tab => socialMediaDomains.some(domain => tab.url.includes(domain))),
-      productivity: tabs.filter(tab =>
-        productivityDomains.some(domain => tab.url.includes(domain))
-      ),
+      productivity: tabs.filter(tab => productivityDomains.some(domain => tab.url.includes(domain))),
       news: tabs.filter(tab => newsDomains.some(domain => tab.url.includes(domain))),
-      other: tabs.filter(
-        tab =>
-          !socialMediaDomains.some(domain => tab.url.includes(domain)) &&
-          !productivityDomains.some(domain => tab.url.includes(domain)) &&
-          !newsDomains.some(domain => tab.url.includes(domain))
+      other: tabs.filter(tab => 
+        !socialMediaDomains.some(domain => tab.url.includes(domain)) &&
+        !productivityDomains.some(domain => tab.url.includes(domain)) &&
+        !newsDomains.some(domain => tab.url.includes(domain))
       )
     };
-
+    
     // Compile analysis
     let result = `📊 **Browsing Session Analysis**\n\n`;
-
+    
     // Session overview
     result += `🎯 **Session Overview:**\n`;
     result += `• **Total open tabs:** ${tabs.length}\n`;
     result += `• **Unique domains:** ${domains.length}\n`;
     result += `• **Active tab:** ${tabList.active_tab ? 'Yes' : 'No'}\n`;
     result += `• **Recent history items:** ${recentHistory.metadata?.total_found || 0}\n`;
-
+    
     // Tab categorization
     result += `\n📂 **Tab Categories:**\n`;
     result += `• **Social Media:** ${categorizedTabs.social.length} tabs\n`;
     result += `• **Productivity:** ${categorizedTabs.productivity.length} tabs\n`;
     result += `• **News/Information:** ${categorizedTabs.news.length} tabs\n`;
     result += `• **Other:** ${categorizedTabs.other.length} tabs\n`;
-
+    
     // Domain analysis
     result += `\n🌐 **Top Domains:**\n`;
     const domainCounts = {};
@@ -2407,41 +2190,41 @@ async function executeSessionAnalysisWorkflow(args) {
         domainCounts[domain] = (domainCounts[domain] || 0) + 1;
       } catch {}
     });
-
+    
     Object.entries(domainCounts)
-      .sort(([, a], [, b]) => b - a)
+      .sort(([,a], [,b]) => b - a)
       .slice(0, 5)
       .forEach(([domain, count]) => {
         result += `• **${domain}:** ${count} tab${count > 1 ? 's' : ''}\n`;
       });
-
+    
     // Focus-specific analysis
-    if (focus === 'productivity') {
+    if (focus === "productivity") {
       result += `\n💼 **Productivity Analysis:**\n`;
-      const duplicateTabs = tabs.filter(
-        (tab, index) => tabs.findIndex(t => t.url === tab.url) !== index
+      const duplicateTabs = tabs.filter((tab, index) => 
+        tabs.findIndex(t => t.url === tab.url) !== index
       );
       result += `• **Duplicate tabs:** ${duplicateTabs.length}\n`;
       result += `• **Productivity tools:** ${categorizedTabs.productivity.length}\n`;
       result += `• **Social media distractions:** ${categorizedTabs.social.length}\n`;
-
+      
       if (categorizedTabs.productivity.length > 0) {
         result += `\n**Active productivity tools:**\n`;
         categorizedTabs.productivity.slice(0, 3).forEach(tab => {
           result += `• ${tab.title}\n`;
         });
       }
-    } else if (focus === 'research') {
+    } else if (focus === "research") {
       result += `\n🔍 **Research Analysis:**\n`;
       result += `• **Information sources:** ${categorizedTabs.news.length + categorizedTabs.other.length}\n`;
       result += `• **Research depth:** ${recentHistory.metadata?.total_found > 20 ? 'Deep' : 'Surface'}\n`;
-
+      
       if (currentPageContent.summary) {
         result += `• **Current page type:** ${currentPageContent.content_type || 'Unknown'}\n`;
         result += `• **Reading time:** ${currentPageContent.summary.reading_time || 0} minutes\n`;
       }
     }
-
+    
     // Recommendations
     result += `\n💡 **Recommendations:**\n`;
     if (tabs.length > 20) {
@@ -2453,37 +2236,38 @@ async function executeSessionAnalysisWorkflow(args) {
     if (categorizedTabs.productivity.length > 0 && categorizedTabs.social.length > 0) {
       result += `• Mix of productivity and social tabs - consider separate browsing sessions\n`;
     }
-
+    
     result += `\n📈 **Session Score:** ${Math.round(((categorizedTabs.productivity.length + categorizedTabs.news.length) / tabs.length) * 100)}% productive`;
-
+    
     return result;
+    
   } catch (error) {
     throw new Error(`Session analysis workflow failed: ${error.message}`);
   }
 }
 
 async function executeOrganizeTabsWorkflow(args) {
-  const { strategy = 'close_duplicates' } = args;
-
+  const { strategy = "close_duplicates" } = args;
+  
   try {
     // Get all open tabs
     const tabList = await callBrowserTool('tab_list', {
       current_window_only: false,
       include_details: true
     });
-
+    
     const tabs = tabList.tabs || [];
     let result = `🗂️ **Tab Organization Workflow**\n\n`;
     result += `📊 **Starting with ${tabs.length} tabs**\n\n`;
-
+    
     let closedTabs = [];
-    const organizedTabs = [];
-
-    if (strategy === 'close_duplicates') {
+    let organizedTabs = [];
+    
+    if (strategy === "close_duplicates") {
       // Find and close duplicate tabs
       const seenUrls = new Set();
       const duplicates = [];
-
+      
       tabs.forEach(tab => {
         if (seenUrls.has(tab.url)) {
           duplicates.push(tab);
@@ -2491,14 +2275,14 @@ async function executeOrganizeTabsWorkflow(args) {
           seenUrls.add(tab.url);
         }
       });
-
+      
       // Close duplicate tabs (keep the first occurrence)
       if (duplicates.length > 0) {
         const tabIds = duplicates.map(tab => tab.id);
         const closeResult = await callBrowserTool('tab_close', {
           tab_ids: tabIds
         });
-
+        
         if (closeResult.success) {
           closedTabs = duplicates;
           result += `✅ **Closed ${duplicates.length} duplicate tabs:**\n`;
@@ -2509,7 +2293,8 @@ async function executeOrganizeTabsWorkflow(args) {
       } else {
         result += `✅ **No duplicate tabs found**\n`;
       }
-    } else if (strategy === 'group_by_domain') {
+      
+    } else if (strategy === "group_by_domain") {
       // Group tabs by domain
       const domainGroups = {};
       tabs.forEach(tab => {
@@ -2526,7 +2311,7 @@ async function executeOrganizeTabsWorkflow(args) {
           domainGroups['unknown'].push(tab);
         }
       });
-
+      
       result += `📂 **Grouped tabs by domain:**\n`;
       Object.entries(domainGroups).forEach(([domain, domainTabs]) => {
         result += `• **${domain}:** ${domainTabs.length} tabs\n`;
@@ -2537,25 +2322,27 @@ async function executeOrganizeTabsWorkflow(args) {
           result += `  - ... and ${domainTabs.length - 3} more\n`;
         }
       });
-    } else if (strategy === 'archive_old') {
+      
+    } else if (strategy === "archive_old") {
       // Find tabs that haven't been active recently
       const currentTime = Date.now();
-      const oneHourAgo = currentTime - 60 * 60 * 1000;
-
+      const oneHourAgo = currentTime - (60 * 60 * 1000);
+      
       // Since we don't have last accessed time, we'll use a heuristic
       // based on tab loading status and position
-      const staleTabsToClose = tabs
-        .filter(
-          tab => tab.status === 'complete' && !tab.active && !tab.pinned && tab.index > 10 // Assume tabs at the end are less active
-        )
-        .slice(0, 10); // Limit to 10 tabs max
-
+      const staleTabsToClose = tabs.filter(tab => 
+        tab.status === 'complete' && 
+        !tab.active && 
+        !tab.pinned &&
+        tab.index > 10 // Assume tabs at the end are less active
+      ).slice(0, 10); // Limit to 10 tabs max
+      
       if (staleTabsToClose.length > 0) {
         const tabIds = staleTabsToClose.map(tab => tab.id);
         const closeResult = await callBrowserTool('tab_close', {
           tab_ids: tabIds
         });
-
+        
         if (closeResult.success) {
           closedTabs = staleTabsToClose;
           result += `✅ **Archived ${staleTabsToClose.length} old tabs:**\n`;
@@ -2567,29 +2354,30 @@ async function executeOrganizeTabsWorkflow(args) {
         result += `✅ **No old tabs to archive**\n`;
       }
     }
-
+    
     // Final summary
     const remainingTabs = tabs.length - closedTabs.length;
     result += `\n📈 **Organization Results:**\n`;
     result += `• **Tabs closed:** ${closedTabs.length}\n`;
     result += `• **Tabs remaining:** ${remainingTabs}\n`;
     result += `• **Organization strategy:** ${strategy}\n`;
-
+    
     if (remainingTabs > 15) {
       result += `\n💡 **Recommendation:** Consider running additional organization strategies to further reduce tab count.`;
     } else {
       result += `\n✅ **Tab organization complete!** Your browsing session is now more organized.`;
     }
-
+    
     return result;
+    
   } catch (error) {
     throw new Error(`Tab organization workflow failed: ${error.message}`);
   }
 }
 
 async function executeFillFormWorkflow(args) {
-  const { form_type = 'auto' } = args;
-
+  const { form_type = "auto" } = args;
+  
   try {
     // Analyze page for form elements
     const formAnalysis = await callBrowserTool('page_analyze', {
@@ -2598,11 +2386,11 @@ async function executeFillFormWorkflow(args) {
       focus_areas: ['forms', 'buttons'],
       max_results: 10
     });
-
+    
     if (!formAnalysis.elements || formAnalysis.elements.length === 0) {
-      throw new Error('No form elements found on current page');
+      throw new Error("No form elements found on current page");
     }
-
+    
     // Categorize form elements
     const formElements = {
       inputs: formAnalysis.elements.filter(el => el.type === 'input'),
@@ -2610,17 +2398,17 @@ async function executeFillFormWorkflow(args) {
       selects: formAnalysis.elements.filter(el => el.type === 'select'),
       buttons: formAnalysis.elements.filter(el => el.type === 'button')
     };
-
+    
     // Analyze each form element for type and requirements
     let result = `📝 **Form Analysis & Fill Assistant**\n\n`;
-
+    
     // Form overview
     result += `🔍 **Form Elements Found:**\n`;
     result += `• **Input fields:** ${formElements.inputs.length}\n`;
     result += `• **Text areas:** ${formElements.textareas.length}\n`;
     result += `• **Select dropdowns:** ${formElements.selects.length}\n`;
     result += `• **Buttons:** ${formElements.buttons.length}\n`;
-
+    
     // Detailed element analysis
     if (formElements.inputs.length > 0) {
       result += `\n📊 **Input Field Analysis:**\n`;
@@ -2630,7 +2418,7 @@ async function executeFillFormWorkflow(args) {
         result += `   • Element ID: ${input.id}\n`;
         result += `   • Ready: ${elementState?.ready ? 'Yes' : 'No'}\n`;
         result += `   • Required: ${input.name.includes('*') ? 'Yes' : 'Unknown'}\n`;
-
+        
         // Suggest field type based on name
         const fieldName = input.name.toLowerCase();
         if (fieldName.includes('email')) {
@@ -2646,7 +2434,7 @@ async function executeFillFormWorkflow(args) {
         }
       });
     }
-
+    
     // Text area analysis
     if (formElements.textareas.length > 0) {
       result += `\n📝 **Text Area Analysis:**\n`;
@@ -2656,27 +2444,26 @@ async function executeFillFormWorkflow(args) {
         result += `   • **Suggested use:** Long-form text input\n`;
       });
     }
-
+    
     // Submit buttons
     if (formElements.buttons.length > 0) {
       result += `\n🔘 **Submit Buttons:**\n`;
-      const submitButtons = formElements.buttons.filter(
-        btn =>
-          btn.name.toLowerCase().includes('submit') ||
-          btn.name.toLowerCase().includes('send') ||
-          btn.name.toLowerCase().includes('save')
+      const submitButtons = formElements.buttons.filter(btn => 
+        btn.name.toLowerCase().includes('submit') || 
+        btn.name.toLowerCase().includes('send') ||
+        btn.name.toLowerCase().includes('save')
       );
-
+      
       submitButtons.forEach((button, index) => {
         result += `${index + 1}. **${button.name}** (ID: ${button.id})\n`;
       });
     }
-
+    
     // Form type detection
     result += `\n🎯 **Detected Form Type:**\n`;
     // Note: Page content detection would need to be done through browser tools
     const contentLower = '';
-
+    
     let detectedType = 'unknown';
     if (contentLower.includes('contact') || contentLower.includes('get in touch')) {
       detectedType = 'contact';
@@ -2687,10 +2474,10 @@ async function executeFillFormWorkflow(args) {
     } else if (contentLower.includes('application') || contentLower.includes('apply')) {
       detectedType = 'application';
     }
-
+    
     result += `• **Auto-detected:** ${detectedType}\n`;
     result += `• **User specified:** ${form_type}\n`;
-
+    
     // Filling recommendations
     result += `\n💡 **Filling Recommendations:**\n`;
     if (formElements.inputs.length > 0) {
@@ -2698,11 +2485,11 @@ async function executeFillFormWorkflow(args) {
       result += `• Use the element IDs provided for precise filling\n`;
       result += `• Test form validation before final submission\n`;
     }
-
+    
     // Ready-to-fill elements
     const readyElements = formAnalysis.elements.filter(el => el.ready);
     result += `\n✅ **Ready to Fill:** ${readyElements.length} elements are ready for interaction\n`;
-
+    
     if (readyElements.length > 0) {
       result += `**Next steps:**\n`;
       result += `1. Use element_fill with the provided Element IDs\n`;
@@ -2710,8 +2497,9 @@ async function executeFillFormWorkflow(args) {
       result += `3. Review form before submission\n`;
       result += `4. Click appropriate submit button when ready\n`;
     }
-
+    
     return result;
+    
   } catch (error) {
     throw new Error(`Form analysis workflow failed: ${error.message}`);
   }

@@ -260,9 +260,6 @@ class BrowserAutomation {
     try {
       let result;
       switch (action) {
-        case "ping":
-          result = { status: "ok", timestamp: Date.now() };
-          break;
         case "analyze":
           result = await this.analyzePage(data);
           break;
@@ -299,15 +296,6 @@ class BrowserAutomation {
           break;
         case "page_style":
           result = await this.handlePageStyle(data);
-          break;
-        case "select_element":
-          result = await this.selectElement(data);
-          break;
-        case "page_structure":
-          result = await this.getPageStructure(data);
-          break;
-        case "page_structure_extract":
-          result = await this.extractFromElement(data);
           break;
         case "ping":
           // Health check for background tab content script readiness
@@ -787,7 +775,7 @@ class BrowserAutomation {
     const startTime = performance.now();
     const pageType = this.detectPageType();
 
-    // Use default max results limit
+    // Use default max results limit  
     max_results = Math.min(max_results, 7); // Allow slightly more for detailed analysis
 
     let elements = [];
@@ -2348,11 +2336,11 @@ class BrowserAutomation {
   // Check if two domains are the same (handles subdomains)
   isSameDomain(domain1, domain2) {
     if (!domain1 || !domain2) return false;
-
+    
     // Remove www. prefix for comparison
     const clean1 = domain1.replace(/^www\./, '');
     const clean2 = domain2.replace(/^www\./, '');
-
+    
     return clean1 === clean2;
   }
 
@@ -2375,7 +2363,7 @@ class BrowserAutomation {
       element_id = null,
       wait_after = 500
     } = options;
-
+    
     const startPosition = {
       x: window.scrollX,
       y: window.scrollY
@@ -2388,15 +2376,15 @@ class BrowserAutomation {
         if (!element) {
           throw new Error(`Element not found: ${element_id}`);
         }
-
+        
         element.scrollIntoView({
           behavior: smooth ? 'smooth' : 'instant',
           block: 'center',
           inline: 'center'
         });
-
+        
         await new Promise(resolve => setTimeout(resolve, wait_after));
-
+        
         return {
           success: true,
           previous_position: startPosition,
@@ -2433,7 +2421,7 @@ class BrowserAutomation {
       // Calculate scroll direction
       let scrollX = 0;
       let scrollY = 0;
-
+      
       switch (direction) {
         case 'up':
           scrollY = -scrollAmount;
@@ -2495,15 +2483,15 @@ class BrowserAutomation {
       } else {
         window.scrollBy(scrollX, scrollY);
       }
-
+      
       // Wait for scroll to complete
       await new Promise(resolve => setTimeout(resolve, wait_after));
-
+      
       const finalPosition = {
         x: window.scrollX,
         y: window.scrollY
       };
-
+      
       const actualScrolled = {
         x: finalPosition.x - startPosition.x,
         y: finalPosition.y - startPosition.y
@@ -2537,14 +2525,14 @@ class BrowserAutomation {
   // 🎨 Page Styling System
   async handlePageStyle(data) {
     const { mode, theme, background, text_color, font, font_size, mood, intensity, effect, duration, remember } = data;
-
+    
     // Remove existing custom styles
     const existingStyle = document.getElementById('opendia-custom-style');
     if (existingStyle) existingStyle.remove();
-
+    
     let css = '';
     let description = '';
-
+    
     try {
       switch (mode) {
         case 'preset':
@@ -2553,44 +2541,44 @@ class BrowserAutomation {
           css = themeData.css;
           description = `Applied ${themeData.name} theme`;
           break;
-
+          
         case 'custom':
           css = this.buildCustomCSS({ background, text_color, font, font_size });
           description = 'Applied custom styling';
           break;
-
+          
         case 'ai_mood':
           css = this.generateMoodCSS(mood, intensity);
           description = `Applied AI-generated style for mood: "${mood}"`;
           break;
-
+          
         case 'effect':
           css = this.applyEffect(effect, duration);
           description = `Applied ${effect} effect for ${duration}s`;
           break;
-
+          
         case 'reset':
           // CSS already removed above
           description = 'Reset page to original styling';
           break;
-
+          
         default:
           throw new Error(`Unknown styling mode: ${mode}`);
       }
-
+      
       if (css) {
         const styleElement = document.createElement('style');
         styleElement.id = 'opendia-custom-style';
         styleElement.textContent = css;
         document.head.appendChild(styleElement);
       }
-
+      
       // Remember preference if requested
       if (remember && mode !== 'reset') {
         const domain = window.location.hostname;
         chrome.storage.local.set({ [`style_${domain}`]: { mode, theme, css } });
       }
-
+      
       return {
         success: true,
         description,
@@ -2602,7 +2590,7 @@ class BrowserAutomation {
         mood,
         intensity
       };
-
+      
     } catch (error) {
       return {
         success: false,
@@ -2616,7 +2604,7 @@ class BrowserAutomation {
 
   buildCustomCSS({ background, text_color, font, font_size }) {
     let css = '';
-
+    
     if (background || text_color || font || font_size) {
       css += '* { ';
       if (background) css += `background: ${background} !important; `;
@@ -2625,7 +2613,7 @@ class BrowserAutomation {
       if (font_size) css += `font-size: ${font_size} !important; `;
       css += '}';
     }
-
+    
     return css;
   }
 
@@ -2633,7 +2621,7 @@ class BrowserAutomation {
     const moodMap = {
       'cozy coffee shop': {
         background: '#2c1810',
-        text: '#f4e4bc',
+        text: '#f4e4bc', 
         accent: '#d4af37',
         font: 'Georgia, serif'
       },
@@ -2657,34 +2645,34 @@ class BrowserAutomation {
         text: '#ffffff'
       }
     };
-
+    
     const style = moodMap[mood.toLowerCase()] || moodMap['cozy coffee shop'];
     return this.buildMoodCSS(style, intensity);
   }
 
   buildMoodCSS(style, intensity) {
     const opacity = intensity === 'subtle' ? '0.3' : intensity === 'medium' ? '0.6' : '0.9';
-
+    
     let css = `
       body {
         background: ${style.background} !important;
         color: ${style.text} !important;
         ${style.font ? `font-family: ${style.font} !important;` : ''}
       }
-
+      
       * {
         color: ${style.text} !important;
       }
-
+      
       a {
         color: ${style.accent || style.text} !important;
       }
     `;
-
+    
     if (style.effects) {
       css += style.effects;
     }
-
+    
     // Add animation keyframes if needed
     if (style.effects && style.effects.includes('energyPulse')) {
       css += `
@@ -2694,7 +2682,7 @@ class BrowserAutomation {
         }
       `;
     }
-
+    
     if (style.effects && style.effects.includes('gentleWave')) {
       css += `
         @keyframes gentleWave {
@@ -2703,7 +2691,7 @@ class BrowserAutomation {
         }
       `;
     }
-
+    
     return css;
   }
 
@@ -2711,39 +2699,39 @@ class BrowserAutomation {
     const effects = {
       matrix_rain: `
         body::after {
-          content: '';
-          position: fixed;
-          top: 0;
-          left: 0;
-          width: 100%;
+          content: ''; 
+          position: fixed; 
+          top: 0; 
+          left: 0; 
+          width: 100%; 
           height: 100%;
           background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="10" font-size="8" fill="%2300ff00">0</text><text y="20" font-size="8" fill="%2300ff00">1</text><text y="30" font-size="8" fill="%2300ff00">0</text><text y="40" font-size="8" fill="%2300ff00">1</text></svg>');
           animation: matrixFall 2s linear infinite;
-          pointer-events: none;
-          z-index: 9999;
+          pointer-events: none; 
+          z-index: 9999; 
           opacity: 0.7;
         }
-        @keyframes matrixFall {
-          from { transform: translateY(-100px); }
-          to { transform: translateY(100vh); }
+        @keyframes matrixFall { 
+          from { transform: translateY(-100px); } 
+          to { transform: translateY(100vh); } 
         }
       `,
       floating_particles: `
         body::before {
-          content: '✨ 🌟 ⭐ 💫';
-          position: fixed;
-          top: 0;
-          left: 0;
-          width: 100%;
+          content: '✨ 🌟 ⭐ 💫'; 
+          position: fixed; 
+          top: 0; 
+          left: 0; 
+          width: 100%; 
           height: 100%;
           animation: floatParticles 6s ease-in-out infinite;
-          pointer-events: none;
-          z-index: 9999;
+          pointer-events: none; 
+          z-index: 9999; 
           font-size: 20px;
         }
-        @keyframes floatParticles {
-          0%, 100% { transform: translateY(100vh) rotate(0deg); }
-          50% { transform: translateY(-100px) rotate(180deg); }
+        @keyframes floatParticles { 
+          0%, 100% { transform: translateY(100vh) rotate(0deg); } 
+          50% { transform: translateY(-100px) rotate(180deg); } 
         }
       `,
       cursor_trail: `
@@ -2755,7 +2743,7 @@ class BrowserAutomation {
         * {
           text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff, 0 0 30px #00ffff !important;
         }
-
+        
         a, button {
           box-shadow: 0 0 15px #ff00ff !important;
         }
@@ -2770,9 +2758,9 @@ class BrowserAutomation {
         }
       `
     };
-
+    
     const css = effects[effect] || '';
-
+    
     // Auto-remove effect after duration
     if (duration && duration > 0) {
       setTimeout(() => {
@@ -2780,1422 +2768,8 @@ class BrowserAutomation {
         if (effectStyle) effectStyle.remove();
       }, duration * 1000);
     }
-
+    
     return css;
-  }
-
-  // 🎯 INTERACTIVE SELECTION TOOL
-  async selectElement(data) {
-    console.log("🎯 Starting interactive element selection");
-    const message = data.message || "Select an element on the page";
-
-    return new Promise((resolve, reject) => {
-      this.selectionResolve = (result) => {
-        this.removeSelectionToast();
-        resolve(result);
-      };
-      this.selectionReject = (err) => {
-        this.removeSelectionToast();
-        reject(err);
-      };
-
-      this.enableSelectionMode(message);
-
-      // Timeout after 60 seconds if no selection
-      this.selectionTimeout = setTimeout(() => {
-        this.disableSelectionMode();
-        this.selectionReject(new Error("Selection timed out after 60 seconds"));
-      }, 60000);
-    });
-  }
-
-  enableSelectionMode(message) {
-    // Create overlay element if it doesn't exist
-    if (!this.selectionOverlay) {
-      this.selectionOverlay = document.createElement('div');
-      this.selectionOverlay.id = 'opendia-selection-overlay';
-      this.selectionOverlay.style.cssText = `
-        position: fixed;
-        pointer-events: none;
-        display: none;
-        background: rgba(0, 150, 255, 0.2);
-        border: 2px solid #0096ff;
-        z-index: 2147483647;
-        transition: all 0.1s ease;
-        border-radius: 4px;
-        box-shadow: 0 0 10px rgba(0, 150, 255, 0.5);
-      `;
-
-      this.selectionLabel = document.createElement('div');
-      this.selectionLabel.style.cssText = `
-        position: absolute;
-        top: -28px;
-        left: 0;
-        background: #0096ff;
-        color: white;
-        padding: 4px 8px;
-        font-family: monospace;
-        font-size: 12px;
-        border-radius: 4px;
-        white-space: nowrap;
-        pointer-events: none;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-      `;
-      this.selectionOverlay.appendChild(this.selectionLabel);
-      document.body.appendChild(this.selectionOverlay);
-    }
-
-    // Create Toast
-    this.createSelectionToast(message);
-
-    // Bind handlers
-    this.boundHoverHandler = this.handleSelectionHover.bind(this);
-    this.boundClickHandler = this.handleSelectionClick.bind(this);
-    this.boundEscHandler = this.handleSelectionEsc.bind(this);
-
-    // Add listeners with capture to ensure we get them first
-    document.addEventListener('mouseover', this.boundHoverHandler, true);
-    document.addEventListener('click', this.boundClickHandler, true);
-    document.addEventListener('keydown', this.boundEscHandler, true);
-
-    // Add global cursor style and animated cursor
-    this.createAnimatedCursor();
-
-    console.log("🎯 Selection mode enabled");
-  }
-
-  disableSelectionMode() {
-    // Remove listeners
-    document.removeEventListener('mouseover', this.boundHoverHandler, true);
-    document.removeEventListener('click', this.boundClickHandler, true);
-    document.removeEventListener('keydown', this.boundEscHandler, true);
-
-    // Remove overlay
-    if (this.selectionOverlay) {
-      this.selectionOverlay.remove();
-      this.selectionOverlay = null;
-    }
-
-    // Remove cursor and toast
-    this.removeAnimatedCursor();
-    this.removeSelectionToast();
-
-    // Clear timeout
-    if (this.selectionTimeout) {
-      clearTimeout(this.selectionTimeout);
-      this.selectionTimeout = null;
-    }
-
-    console.log("🎯 Selection mode disabled");
-  }
-
-  createSelectionToast(message) {
-    if (this.selectionToast) this.selectionToast.remove();
-
-    this.selectionToast = document.createElement('div');
-    this.selectionToast.id = 'opendia-selection-toast';
-    this.selectionToast.style.cssText = `
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: #333;
-      color: white;
-      padding: 12px 20px;
-      border-radius: 30px;
-      display: flex;
-      align-items: center;
-      gap: 15px;
-      z-index: 2147483647;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-      font-family: sans-serif;
-      border: 1px solid #555;
-    `;
-
-    const icon = document.createElement('div');
-    icon.innerHTML = '🎯';
-
-    const text = document.createElement('div');
-    text.textContent = message;
-    text.style.fontWeight = 'bold';
-
-    const cancelBtn = document.createElement('button');
-    cancelBtn.textContent = 'Cancel';
-    cancelBtn.style.cssText = `
-      background: #ff4444;
-      border: none;
-      color: white;
-      padding: 5px 12px;
-      border-radius: 15px;
-      cursor: pointer;
-      font-size: 12px;
-      font-weight: bold;
-    `;
-    cancelBtn.onclick = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.handleSelectionEsc({ key: 'Escape', preventDefault: () => {}, stopPropagation: () => {} });
-    };
-
-    this.selectionToast.appendChild(icon);
-    this.selectionToast.appendChild(text);
-    this.selectionToast.appendChild(cancelBtn);
-    document.body.appendChild(this.selectionToast);
-  }
-
-  removeSelectionToast() {
-    if (this.selectionToast) {
-      this.selectionToast.remove();
-      this.selectionToast = null;
-    }
-  }
-
-  createAnimatedCursor() {
-    if (this.animatedCursor) this.animatedCursor.remove();
-
-    // Create styles for animation
-    const styleId = 'opendia-cursor-style';
-    if (!document.getElementById(styleId)) {
-      const style = document.createElement('style');
-      style.id = styleId;
-      style.textContent = `
-        @keyframes opendia-pulse {
-          0% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
-          50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.4; }
-          100% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
-        }
-        .opendia-hide-cursor * { cursor: none !important; }
-      `;
-      document.head.appendChild(style);
-    }
-
-    document.documentElement.classList.add('opendia-hide-cursor');
-
-    this.animatedCursor = document.createElement('div');
-    this.animatedCursor.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 20px;
-      height: 20px;
-      background: rgba(0, 150, 255, 0.6);
-      border: 2px solid #fff;
-      border-radius: 50%;
-      pointer-events: none;
-      z-index: 2147483647;
-      transform: translate(-50%, -50%);
-      box-shadow: 0 0 10px rgba(0, 150, 255, 0.5);
-    `;
-
-    const pulse = document.createElement('div');
-    pulse.style.cssText = `
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 150, 255, 0.3);
-      border-radius: 50%;
-      animation: opendia-pulse 1.5s infinite ease-in-out;
-    `;
-    this.animatedCursor.appendChild(pulse);
-    document.body.appendChild(this.animatedCursor);
-
-    this.boundCursorHandler = (e) => {
-      this.animatedCursor.style.left = e.clientX + 'px';
-      this.animatedCursor.style.top = e.clientY + 'px';
-    };
-    document.addEventListener('mousemove', this.boundCursorHandler, true);
-  }
-
-  removeAnimatedCursor() {
-    document.documentElement.classList.remove('opendia-hide-cursor');
-    if (this.animatedCursor) {
-      this.animatedCursor.remove();
-      this.animatedCursor = null;
-    }
-    document.removeEventListener('mousemove', this.boundCursorHandler, true);
-  }
-
-  handleSelectionHover(event) {
-    event.stopPropagation();
-    const target = event.target;
-
-    // Don't highlight the overlay itself (though pointer-events: none should prevent this)
-    if (target === this.selectionOverlay || this.selectionOverlay.contains(target)) return;
-
-    const rect = target.getBoundingClientRect();
-
-    this.selectionOverlay.style.top = rect.top + 'px';
-    this.selectionOverlay.style.left = rect.left + 'px';
-    this.selectionOverlay.style.width = rect.width + 'px';
-    this.selectionOverlay.style.height = rect.height + 'px';
-    this.selectionOverlay.style.display = 'block';
-
-    // Update label
-    const tagName = target.tagName.toLowerCase();
-    const id = target.id ? '#' + target.id : '';
-    const classes = Array.from(target.classList).map(c => '.' + c).join('');
-    this.selectionLabel.textContent = `${tagName}${id}${classes}`;
-  }
-
-  handleSelectionClick(event) {
-    event.preventDefault();
-    event.stopPropagation();
-
-    const target = event.target;
-    this.disableSelectionMode();
-
-    // Extract info
-    const info = {
-      tagName: target.tagName.toLowerCase(),
-      id: target.id,
-      classes: Array.from(target.classList),
-      attributes: this.getAttributes(target),
-      textContent: target.textContent.trim().substring(0, 500),
-      html: this.getTruncatedHTML(target),
-      parent: this.getParentInfo(target),
-      path: this.getCssPath(target)
-    };
-
-    if (this.selectionResolve) {
-      this.selectionResolve(info);
-      this.selectionResolve = null;
-    }
-  }
-
-  handleSelectionEsc(event) {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      event.stopPropagation();
-      this.disableSelectionMode();
-      if (this.selectionReject) {
-        this.selectionReject(new Error("Selection cancelled by user"));
-        this.selectionReject = null;
-      }
-    }
-  }
-
-  getAttributes(element) {
-    const attrs = {};
-    for (const attr of element.attributes) {
-      attrs[attr.name] = attr.value;
-    }
-    return attrs;
-  }
-
-  getTruncatedHTML(element) {
-    // Clone to avoid modifying the actual element
-    const clone = element.cloneNode(true);
-
-    // Remove scripts and styles to reduce noise
-    const scripts = clone.querySelectorAll('script, style');
-    scripts.forEach(s => s.remove());
-
-    // Truncate long text content in children
-    const walker = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT, null, false);
-    let node;
-    while (node = walker.nextNode()) {
-      if (node.textContent.length > 100) {
-        node.textContent = node.textContent.substring(0, 100) + '...';
-      }
-    }
-
-    // Truncate SVG content
-    const svgs = clone.querySelectorAll('svg');
-    svgs.forEach(svg => {
-      svg.innerHTML = '<!-- SVG content truncated -->';
-    });
-
-    // Get HTML and truncate if still too long
-    let html = clone.outerHTML;
-    if (html.length > 5000) {
-      html = html.substring(0, 5000) + '... <!-- Truncated -->';
-    }
-
-    return html;
-  }
-
-  getParentInfo(element) {
-    const parent = element.parentElement;
-    if (!parent) return null;
-
-    return {
-      tagName: parent.tagName.toLowerCase(),
-      id: parent.id,
-      classes: Array.from(parent.classList)
-    };
-  }
-
-  getCssPath(el) {
-    if (!(el instanceof Element)) return;
-    const path = [];
-    while (el.nodeType === Node.ELEMENT_NODE) {
-      let selector = el.nodeName.toLowerCase();
-      if (el.id) {
-        selector += '#' + el.id;
-        path.unshift(selector);
-        break;
-      } else {
-        let sib = el, nth = 1;
-        while (sib = sib.previousElementSibling) {
-          if (sib.nodeName.toLowerCase() == selector)
-            nth++;
-        }
-        if (nth != 1)
-          selector += ":nth-of-type("+nth+")";
-      }
-      path.unshift(selector);
-      el = el.parentNode;
-    }
-    return path.join(" > ");
-  }
-
-  // 🏗️ PAGE STRUCTURE OUTLINE TOOL
-  async getPageStructure(data) {
-    const options = {
-      maxDepth: data.max_depth || 8,
-      maxNodes: data.max_nodes || 400,
-      maxChildrenPerGroup: data.max_children_per_group || 6,
-      examplesPerGroup: data.examples_per_group || 3,
-      format: data.format || 'compact', // 'compact' or 'json'
-      // Control flags (default to true for comprehensive view)
-      include_interactive: data.include_interactive !== false,
-      include_structure: data.include_structure !== false,
-      include_metadata: data.include_metadata !== false
-    };
-
-    console.log("🏗️ Building comprehensive page structure", options);
-
-    // Initialize registry
-    if (!window.__opendiaElementRegistry) {
-      window.__opendiaElementRegistry = new Map();
-    }
-
-    // 1. Extract Page Metadata & Pagination
-    const metadata = this.getPageMetadata();
-
-    // 2. Build Comprehensive Tree
-    const budget = { remaining: options.maxNodes };
-    const viewportArea = window.innerWidth * window.innerHeight || 1;
-    const root = document.body || document.documentElement;
-
-    const outline = this.summarizeElement(root, 0, "root", budget, options, viewportArea);
-
-    // 3. Post-process: Identify Groups & Selectors
-    const groups = [];
-    this.extractGroupsAndSelectors(outline, groups);
-
-    // 4. Assign logical IDs
-    this.assignLogicalIds(outline);
-
-    const result = {
-      metadata,
-      groups,
-      outline
-    };
-
-    // Return based on format
-    if (options.format === 'regions') {
-      const regionsResult = this.detectRegionsStructure(metadata);
-      const text = this.formatAsRegionsYAML(regionsResult);
-      const response = {
-        format: 'regions',
-        text,
-        metadata,
-        regions: regionsResult.regions,
-        links: regionsResult.links
-      };
-      console.log("🏗️ getPageStructure returning regions:", response);
-      return response;
-    }
-
-    if (options.format === 'compact') {
-      const text = this.formatAsComprehensiveText(result, options);
-      const response = {
-        format: 'compact',
-        text,
-        metadata,
-        groupsCount: groups.length
-      };
-      console.log("🏗️ getPageStructure returning compact:", response);
-      return response;
-    }
-
-    console.log("🏗️ getPageStructure returning json:", result);
-    return {
-      format: 'json',
-      ...result
-    };
-  }
-
-  getPageMetadata() {
-    const metadata = {
-      title: document.title,
-      url: window.location.href,
-      viewport: { width: window.innerWidth, height: window.innerHeight },
-      pagination: null
-    };
-
-    // Detect page-level pagination
-    const nextLink = document.querySelector('a[rel="next"], link[rel="next"]');
-    const prevLink = document.querySelector('a[rel="prev"], link[rel="prev"]');
-
-    if (nextLink || prevLink) {
-      metadata.pagination = {
-        next: nextLink ? (nextLink.href || nextLink.getAttribute('href')) : null,
-        prev: prevLink ? (prevLink.href || prevLink.getAttribute('href')) : null
-      };
-    }
-
-    // Extract OG data
-    const ogTitle = document.querySelector('meta[property="og:title"]');
-    const ogDesc = document.querySelector('meta[property="og:description"]');
-    if (ogTitle) metadata.ogTitle = ogTitle.content;
-    if (ogDesc) metadata.ogDescription = ogDesc.content;
-
-    return metadata;
-  }
-
-  summarizeElement(el, depth, id, budget, options, viewportArea) {
-    if (budget.remaining <= 0) return null;
-
-    // Register element
-    window.__opendiaElementRegistry.set(id, el);
-
-    const bbox = this.getBBoxForOutline(el, viewportArea);
-    const interactive = this.isInteractiveElementForOutline(el);
-    const landmark = this.isLandmarkForOutline(el);
-    const role = this.getRoleForOutline(el);
-    const textPreview = this.getVisibleTextForOutline(el, 160);
-    const label = this.getElementLabelForOutline(el, textPreview);
-    const attrs = this.collectUsefulAttributesForOutline(el);
-
-    const baseNode = {
-      kind: "node",
-      id,
-      tag: el.tagName.toLowerCase(),
-      role,
-      interactive,
-      landmark,
-      bbox,
-      label,
-      textPreview,
-      attributes: attrs,
-      children: []
-    };
-
-    budget.remaining -= 1;
-    if (budget.remaining <= 0) {
-      baseNode.truncated = true;
-      return baseNode;
-    }
-
-    if (depth >= options.maxDepth && !interactive && !landmark) {
-      baseNode.truncated = true;
-      return baseNode;
-    }
-
-    const children = this.summarizeChildren(el, depth, id, budget, options, viewportArea);
-    baseNode.children = children;
-    return baseNode;
-  }
-
-  summarizeChildren(parent, depth, parentId, budget, options, viewportArea) {
-    if (budget.remaining <= 0) return [];
-
-    const rawChildren = Array.from(parent.children);
-    const visibleChildren = rawChildren.filter(el => this.isElementVisibleForOutline(el));
-
-    const childrenInfo = visibleChildren.map((el, index) => {
-      const bbox = this.getBBoxForOutline(el, viewportArea);
-      const interactive = this.isInteractiveElementForOutline(el);
-      const landmark = this.isLandmarkForOutline(el);
-      const text = this.getVisibleTextForOutline(el, 240);
-      const textLen = text.length;
-      const areaBucket = this.getAreaBucket(bbox.viewportAreaRatio);
-      const score = this.getImportanceScore(bbox, interactive, landmark, textLen);
-      return { el, index, bbox, interactive, landmark, textLen, score, areaBucket };
-    });
-
-    // Group by structural signature
-    const groupsMap = new Map();
-    for (const child of childrenInfo) {
-      const signature = this.getSignatureForOutline(child.el, child.areaBucket);
-      const group = groupsMap.get(signature);
-      if (group) {
-        group.members.push(child);
-      } else {
-        groupsMap.set(signature, { signature, members: [child] });
-      }
-    }
-
-    const groups = Array.from(groupsMap.values());
-    groups.sort((a, b) => {
-      const aMax = Math.max(...a.members.map(m => m.score));
-      const bMax = Math.max(...b.members.map(m => m.score));
-      return bMax - aMax;
-    });
-
-    const out = [];
-
-    for (let gIndex = 0; gIndex < groups.length; gIndex++) {
-      if (budget.remaining <= 0) break;
-
-      const group = groups[gIndex];
-      const members = group.members.sort((a, b) => a.index - b.index); // Keep original order
-
-      if (members.length <= options.maxChildrenPerGroup) {
-        // Individual nodes
-        for (const m of members) {
-          if (budget.remaining <= 0) break;
-          const childId = this.makeChildIdForOutline(parentId, m.el, m.index);
-          const childNode = this.summarizeElement(m.el, depth + 1, childId, budget, options, viewportArea);
-          if (childNode) out.push(childNode);
-        }
-      } else {
-        // Repeated Group
-        const groupId = `${parentId}/group[${gIndex + 1}]`;
-        const examples = [];
-        const exampleCount = Math.min(options.examplesPerGroup, members.length);
-
-        // Store group elements in registry
-        window.__opendiaElementRegistry.set(groupId, members.map(m => m.el));
-
-        for (let i = 0; i < exampleCount; i++) {
-          if (budget.remaining <= 0) break;
-          const m = members[i];
-          const exId = this.makeChildIdForOutline(parentId, m.el, m.index);
-          const exNode = this.summarizeElement(m.el, depth + 1, exId, budget, options, viewportArea);
-          if (exNode) examples.push(exNode);
-        }
-
-        const groupNode = {
-          kind: "repeated_group",
-          id: groupId,
-          signature: group.signature,
-          total: members.length,
-          shown: examples.length,
-          omitted: members.length - examples.length,
-          examples,
-          // Contextual info
-          containerSelector: this.generateSelector(parent),
-          itemSelector: this.generateSelector(members[0].el, parent)
-        };
-
-        budget.remaining -= 1;
-        out.push(groupNode);
-      }
-    }
-
-    return out;
-  }
-
-  // Generate robust CSS selector
-  generateSelector(el, context = null) {
-    if (!el) return '';
-
-    // 1. ID
-    if (el.id) return `#${el.id}`;
-
-    // 2. Classes
-    if (el.className && typeof el.className === 'string') {
-      const classes = el.className.split(/\s+/).filter(c => c && !c.match(/^[0-9]/));
-      if (classes.length > 0) {
-        // Use most specific class combination
-        return `.${classes.join('.')}`;
-      }
-    }
-
-    // 3. Tag + Attributes
-    const tag = el.tagName.toLowerCase();
-    if (el.getAttribute('name')) return `${tag}[name="${el.getAttribute('name')}"]`;
-    if (el.getAttribute('role')) return `${tag}[role="${el.getAttribute('role')}"]`;
-
-    // 4. Tag + Nth-child (if context provided)
-    if (context) {
-      return tag; // Simple tag if we are looking for children of context
-    }
-
-    return tag;
-  }
-
-  extractGroupsAndSelectors(node, groups) {
-    if (!node) return;
-
-    if (node.kind === 'repeated_group') {
-      // Analyze the group items to find common data fields
-      const itemSchema = this.analyzeGroupSchema(node.examples[0]);
-
-      groups.push({
-        id: node.id,
-        count: node.total,
-        containerSelector: node.containerSelector,
-        itemSelector: node.itemSelector,
-        schema: itemSchema
-      });
-    }
-
-    if (node.children) {
-      node.children.forEach(child => this.extractGroupsAndSelectors(child, groups));
-    }
-    if (node.examples) {
-      node.examples.forEach(ex => this.extractGroupsAndSelectors(ex, groups));
-    }
-  }
-
-  analyzeGroupSchema(exampleNode) {
-    const schema = {};
-
-    const traverse = (n, path = '') => {
-      if (!n) return;
-
-      // Look for data-rich elements
-      if (n.textPreview && n.textPreview.length > 0 && n.textPreview.length < 100) {
-        const key = n.attributes?.classes?.[0] || n.tag;
-        const selector = this.generateSelector(window.__opendiaElementRegistry.get(n.id));
-        schema[path + key] = { selector, example: n.textPreview };
-      }
-
-      if (n.tag === 'img' && n.attributes?.src) {
-        schema[path + 'image'] = { selector: 'img', attribute: 'src' };
-      }
-
-      if (n.tag === 'a' && n.attributes?.href) {
-        schema[path + 'link'] = { selector: 'a', attribute: 'href' };
-      }
-
-      if (n.children) {
-        n.children.forEach(child => traverse(child, path));
-      }
-    };
-
-    traverse(exampleNode);
-    return schema;
-  }
-
-  assignLogicalIds(node, prefix = '', counters = {}) {
-    if (!node) return;
-
-    // Root node
-    if (!prefix) {
-      node.logicalId = 'root';
-      prefix = 'root';
-    } else {
-      // Detect node type for appropriate prefix
-      const nodeType = this.detectLogicalNodeType(node);
-
-      if (!counters[nodeType]) counters[nodeType] = 0;
-      counters[nodeType]++;
-
-      // Generate logical ID
-      const typeCode = nodeType[0].toUpperCase();
-      node.logicalId = `${prefix === 'root' ? '' : prefix + '.'}${typeCode}${counters[nodeType]}`;
-    }
-
-    // Keep original path ID for retrieval
-    node.pathId = node.id;
-
-    // Recurse to children
-    if (node.kind === 'repeated_group' && node.examples) {
-      const childCounters = {};
-      node.examples.forEach(example => {
-        this.assignLogicalIds(example, node.logicalId, childCounters);
-      });
-    } else if (node.children) {
-      const childCounters = {};
-      node.children.forEach(child => {
-        this.assignLogicalIds(child, node.logicalId, childCounters);
-      });
-    }
-  }
-
-  detectLogicalNodeType(node) {
-    // Detect what kind of element this is for ID assignment
-    if (node.kind === 'repeated_group') return 'group';
-    if (node.landmark) {
-      if (node.tag === 'header') return 'header';
-      if (node.tag === 'nav') return 'nav';
-      if (node.tag === 'footer') return 'footer';
-      return 'section';
-    }
-    if (node.tag === 'nav') return 'nav';
-
-    const classes = (node.attributes?.classes || []).join(' ');
-
-    // Card/tile detection
-    if (/grid|col|card|tile|item/.test(classes)) return 'card';
-
-    // Section detection
-    if (/section|container|content/.test(classes)) return 'section';
-
-    // Interactive elements
-    if (node.interactive) return 'control';
-
-    // Default to element
-    return 'element';
-  }
-
-  formatAsComprehensiveText(result, options) {
-    const lines = [];
-    const { metadata, groups, outline } = result;
-
-    // 1. Metadata Header
-    lines.push(`=== PAGE ANALYSIS ===`);
-    lines.push(`Title: ${metadata.title}`);
-    lines.push(`URL: ${metadata.url}`);
-    if (metadata.pagination) {
-      lines.push(`Pagination: ${metadata.pagination.next ? '[Next Page Available]' : 'Single Page'}`);
-    }
-    lines.push('');
-
-    // 2. Identified Groups (High level summary)
-    if (groups.length > 0) {
-      lines.push(`=== DETECTED REPEATED GROUPS (${groups.length}) ===`);
-      groups.forEach((g, i) => {
-        lines.push(`[${g.id}] ${g.count} items`);
-        lines.push(`  Selector: ${g.containerSelector} > ${g.itemSelector}`);
-        lines.push(`  Schema: ${Object.keys(g.schema).slice(0, 5).join(', ')}`);
-      });
-      lines.push('');
-    }
-
-    // 3. Structural Tree (TOON-ish format)
-    lines.push(`=== STRUCTURE TREE ===`);
-    lines.push(this.formatToonTree(outline));
-
-    return lines.join('\n');
-  }
-
-  formatToonTree(node, depth = 0) {
-    if (!node) return '';
-
-    // Skip layout noise elements
-    if (this.shouldSkipInOutline(node)) return '';
-
-    const indent = '  '.repeat(depth);
-    const parts = [];
-
-    // Use logical ID for display (fallback to path ID if not assigned)
-    const displayId = node.logicalId || node.id;
-    parts.push(displayId);
-
-    // Tag and classes
-    let selector = node.tag;
-    if (node.attributes?.id) selector += `#${node.attributes.id}`;
-    if (node.attributes?.classes?.length) selector += `.${node.attributes.classes.join('.')}`;
-    parts.push(selector);
-
-    // Flags
-    if (node.interactive) parts.push('🔵');
-    if (node.landmark) parts.push('⭐');
-
-    // Content
-    if (node.kind === 'repeated_group') {
-      parts.push(`[GROUP: ${node.total} items]`);
-    } else if (node.label) {
-      parts.push(`"${node.label.substring(0, 30)}${node.label.length > 30 ? '...' : ''}"`);
-    } else if (node.textPreview) {
-      parts.push(`"${node.textPreview.substring(0, 30)}${node.textPreview.length > 30 ? '...' : ''}"`);
-    }
-
-    // Attributes
-    if (node.attributes?.href) parts.push(`→ ${node.attributes.href}`);
-    if (node.attributes?.value) parts.push(`=${node.attributes.value}`);
-
-    const line = `${indent}${parts.join(' ')}`;
-    const lines = [line];
-
-    // Children - sort by Y position at top levels
-    let children = node.children || [];
-    if (node.kind === 'repeated_group') {
-      node.examples.forEach((ex, i) => {
-        lines.push(`${indent}  Example ${i+1}:`);
-        lines.push(this.formatToonTree(ex, depth + 2));
-      });
-    } else if (children.length > 0) {
-      // Sort children by Y position if we're at shallow depth
-      if (depth <= 2) {
-        children = this.sortByVisualPosition(children);
-      }
-
-      children.forEach(child => {
-        const childOutput = this.formatToonTree(child, depth + 1);
-        if (childOutput) lines.push(childOutput);
-      });
-    }
-
-    return lines.join('\n');
-  }
-
-  shouldSkipInOutline(node) {
-    // Skip pure layout elements
-    if (node.tag === 'hr') return true;
-    if (node.tag === 'br') return true;
-
-    // Skip pure spacing divs
-    const classes = (node.attributes?.classes || []).join(' ');
-    if (/spacer|separator|divider|break/.test(classes) && !node.interactive) return true;
-
-    // Skip if no text, no interaction, no meaningful children
-    if (!node.textPreview &&
-        !node.label &&
-        !node.interactive &&
-        (!node.children || node.children.length === 0)) {
-      return true;
-    }
-
-    return false;
-  }
-
-  sortByVisualPosition(nodes) {
-    // Sort by Y coordinate for visual ordering
-    return nodes.slice().sort((a, b) => {
-      const aY = a.bbox?.y || 0;
-      const bY = b.bbox?.y || 0;
-      return aY - bY;
-    });
-  }
-
-
-
-  isElementVisibleForOutline(el) {
-    if (!(el instanceof HTMLElement)) return false;
-    const style = window.getComputedStyle(el);
-    if (style.display === "none" || style.visibility === "hidden") return false;
-    const rect = el.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) return false;
-    if (rect.bottom < 0 || rect.top > window.innerHeight * 3) return false;
-    return true;
-  }
-
-  getBBoxForOutline(el, viewportArea) {
-    const rect = el.getBoundingClientRect();
-    const area = Math.max(0, rect.width * rect.height);
-    return {
-      x: Math.round(rect.x),
-      y: Math.round(rect.y),
-      width: Math.round(rect.width),
-      height: Math.round(rect.height),
-      area: Math.round(area),
-      viewportAreaRatio: viewportArea ? area / viewportArea : 0
-    };
-  }
-
-  getImportanceScore(bbox, interactive, landmark, textLen) {
-    const areaScore = Math.log(1 + bbox.viewportAreaRatio * 1000);
-    const interScore = interactive ? 4 : 0;
-    const landScore = landmark ? 3 : 0;
-    const textScore = Math.log(1 + textLen);
-    return 3 * areaScore + interScore + landScore + textScore;
-  }
-
-  getAreaBucket(ratio) {
-    if (ratio > 0.5) return "XL";
-    if (ratio > 0.2) return "L";
-    if (ratio > 0.05) return "M";
-    if (ratio > 0.01) return "S";
-    return "XS";
-  }
-
-  isInteractiveElementForOutline(el) {
-    const tag = el.tagName.toLowerCase();
-    const role = this.getRoleForOutline(el);
-    const hasClick = typeof el.onclick === "function";
-
-    if (["a", "button", "input", "select", "textarea", "summary"].includes(tag)) {
-      return true;
-    }
-
-    if (["button", "link", "checkbox", "radio", "tab", "menuitem", "textbox", "combobox", "slider", "switch"].includes(role)) {
-      return true;
-    }
-
-    if (el.tabIndex >= 0) return true;
-    if (hasClick) return true;
-
-    const style = window.getComputedStyle(el);
-    if (style.cursor === "pointer") return true;
-
-    return false;
-  }
-
-  isLandmarkForOutline(el) {
-    const tag = el.tagName.toLowerCase();
-    const role = this.getRoleForOutline(el);
-
-    if (["header", "nav", "main", "aside", "footer"].includes(tag)) {
-      return true;
-    }
-
-    if (["banner", "navigation", "main", "complementary", "contentinfo", "region"].includes(role)) {
-      return true;
-    }
-
-    return false;
-  }
-
-  getRoleForOutline(el) {
-    return el.getAttribute("role") || null;
-  }
-
-  getVisibleTextForOutline(el, maxLen) {
-    let text = "";
-    if (el instanceof HTMLElement) {
-      text = el.innerText || "";
-    } else {
-      text = el.textContent || "";
-    }
-    const normalized = text.replace(/\s+/g, " ").trim();
-    if (!normalized) return "";
-    if (normalized.length > maxLen) {
-      return normalized.slice(0, maxLen) + "…";
-    }
-    return normalized;
-  }
-
-  getElementLabelForOutline(el, textPreview) {
-    const aria = el.getAttribute("aria-label");
-    if (aria && aria.trim()) return aria.trim();
-
-    const title = el.getAttribute("title");
-    if (title && title.trim()) return title.trim();
-
-    if (el instanceof HTMLImageElement) {
-      const alt = el.alt;
-      if (alt && alt.trim()) return alt.trim();
-    }
-
-    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) {
-      const placeholder = el.getAttribute("placeholder");
-      if (placeholder && placeholder.trim()) return placeholder.trim();
-    }
-
-    return textPreview || undefined;
-  }
-
-  collectUsefulAttributesForOutline(el) {
-    const attrs = {};
-    const id = el.getAttribute("id");
-    if (id) attrs.id = id;
-
-    if (el.classList && el.classList.length) {
-      const classes = Array.from(el.classList).slice(0, 3);
-      if (classes.length) attrs.classes = classes;
-    }
-
-    if (el instanceof HTMLAnchorElement && el.href) {
-      attrs.href = this.simplifyUrlForOutline(el.href);
-    }
-
-    if (el instanceof HTMLInputElement) {
-      if (el.type) attrs.type = el.type;
-      if (el.name) attrs.name = el.name;
-    }
-
-    if (el instanceof HTMLButtonElement) {
-      if (el.type) attrs.type = el.type;
-      if (el.name) attrs.name = el.name;
-    }
-
-    return attrs;
-  }
-
-  simplifyUrlForOutline(url) {
-    try {
-      const u = new URL(url, location.href);
-      const pathParts = u.pathname.split("/").filter(Boolean);
-      let pathSummary = "";
-      if (pathParts.length > 2) {
-        pathSummary = `/${pathParts[0]}/…/${pathParts[pathParts.length - 1]}`;
-      } else if (pathParts.length > 0) {
-        pathSummary = `/${pathParts.join("/")}`;
-      }
-      const queryHint = u.search ? " ?…" : "";
-      return `${u.origin}${pathSummary}${queryHint}`;
-    } catch {
-      if (url.length > 80) return url.slice(0, 80) + "…";
-      return url;
-    }
-  }
-
-  getSignatureForOutline(el, areaBucket) {
-    const tag = el.tagName.toLowerCase();
-    const role = this.getRoleForOutline(el) || "";
-    const classes = el.classList ? Array.from(el.classList).slice(0, 3).sort().join(".") : "";
-    const hasImg = !!el.querySelector("img,picture,svg");
-    const hasLink = !!el.querySelector("a,button,[role='button']");
-    const hasInput = !!el.querySelector("input,select,textarea");
-    return [tag, role, classes, areaBucket, hasImg ? "img" : "", hasLink ? "link" : "", hasInput ? "input" : ""].join("|");
-  }
-
-  makeChildIdForOutline(parentId, el, index) {
-    const tag = el.tagName.toLowerCase();
-    const position = index + 1;
-    return `${parentId}/${tag}[${position}]`;
-  }
-
-  // === REGION DETECTION (Feature-based, domain-agnostic) ===
-
-  detectRegionsStructure(metadata) {
-    const regions = [];
-    const allLinks = [];
-    let regionId = 0;
-
-    // 1. Detect header
-    const header = document.querySelector('header, [role="banner"]');
-    if (header) {
-      const headerRegion = this.analyzeRegion(header, `header`, 'header');
-      if (headerRegion) regions.push(headerRegion);
-    }
-
-    // 2. Detect main content area
-    let main = document.querySelector('main, [role="main"], #main, .main-content, #content, .content');
-    if (!main) {
-      // Fallback: find largest content container
-      main = document.body;
-    }
-
-    if (main) {
-      const mainSections = this.detectSectionsInContainer(main, regionId);
-      regions.push(...mainSections);
-      regionId += mainSections.length;
-    }
-
-    // 3. Detect footer
-    const footer = document.querySelector('footer, [role="contentinfo"]');
-    if (footer) {
-      const footerRegion = this.analyzeRegion(footer, `footer`, 'footer');
-      if (footerRegion) regions.push(footerRegion);
-    }
-
-    // 4. Collect all anchor links
-    const anchors = Array.from(document.querySelectorAll('a[href]'));
-    anchors.forEach((a, i) => {
-      const rect = a.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
-        allLinks.push({
-          id: `L${i + 1}`,
-          text: a.textContent.trim().substring(0, 50),
-          href: a.href
-        });
-      }
-    });
-
-    return {
-      regions,
-      links: allLinks.slice(0, 50)
-    };
-  }
-
-  detectSectionsInContainer(container, startId) {
-    const sections = [];
-    let id = startId;
-
-    // Analyze top-level children to preserve page structure
-    const children = Array.from(container.children);
-
-    for (const child of children) {
-      const rect = child.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) continue;
-
-      const region = this.analyzeRegion(child, `R${++id}`, this.inferRegionKind(child));
-      if (region) sections.push(region);
-    }
-
-    // If we found nothing (e.g. wrappers obscured content), try finding grids directly
-    if (sections.length === 0) {
-      const gridContainers = this.findCardGridContainers(container);
-      for (const gridContainer of gridContainers) {
-        const region = this.analyzeRegion(gridContainer, `R${++id}`, 'card_section');
-        if (region) sections.push(region);
-      }
-    }
-
-    return sections;
-  }
-
-  findCardGridContainers(root) {
-    const candidates = [];
-    const visited = new Set();
-
-    const traverse = (element) => {
-      if (visited.has(element)) return;
-      visited.add(element);
-
-      const children = Array.from(element.children);
-      if (children.length === 0) return;
-
-      // Check if children look like cards
-      const groups = this.findRepeatedItemCandidates(element);
-      if (groups.length > 0 && groups.some(g => g.items.length >= 3)) {
-        candidates.push(element);
-        return; // Don't recurse into detected grids
-      }
-
-      // No grid found, continue deeper
-      children.forEach(traverse);
-    };
-
-    traverse(root);
-    return candidates;
-  }
-
-  analyzeRegion(element, id, kind) {
-    const rect = element.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return null;
-
-    const region = { id, kind };
-
-    const heading = element.querySelector('h1, h2, h3, h4, [class*="head"], [class*="title"]');
-    if (heading) {
-      region.title = heading.textContent.trim().substring(0, 80);
-    }
-
-    const navLists = this.detectNavLists(element);
-    if (navLists.length > 0) region.nav_lists = navLists;
-
-    // Use recursive grid detection within this region
-    const cardGrids = this.detectCardGrids(element);
-    if (cardGrids.length > 0) region.card_grids = cardGrids;
-
-    if (this.looksLikeProductPage()) {
-      const priceBlocks = this.detectPriceBlocks(element);
-      if (priceBlocks.length > 0) region.price_blocks = priceBlocks;
-
-      const features = this.detectFeatureList(element);
-      if (features.length > 0) region.feature_list = features.slice(0, 5);
-    }
-
-    if (!region.nav_lists && !region.card_grids && !region.price_blocks) {
-      const text = element.textContent.trim();
-      if (text.length > 0 && text.length < 500) {
-        region.description = text.substring(0, 200);
-      }
-    }
-
-    // Filter out empty regions unless they have a title
-    if (!region.title && !region.nav_lists && !region.card_grids && !region.price_blocks && !region.description) {
-      return null;
-    }
-
-    return region;
-  }
-
-  inferRegionKind(element) {
-    const classes = element.className.toLowerCase();
-    const id = element.id.toLowerCase();
-
-    if (/product|item/.test(classes + id)) return 'product_detail';
-    if (/gallery|image|photo/.test(classes + id)) return 'media_gallery';
-    if (/price|cart|buy/.test(classes + id)) return 'purchase_info';
-    if (/review|rating|qa/.test(classes + id)) return 'social_proof';
-
-    return 'section';
-  }
-
-  detectNavLists(container) {
-    const lists = [];
-    const ulElements = Array.from(container.querySelectorAll('ul, ol, nav'));
-
-    for (const ul of ulElements) {
-      const links = Array.from(ul.querySelectorAll('a[href]'));
-      if (links.length >= 3 && links.length <= 20) {
-        const avgLength = links.reduce((sum, a) => sum + a.textContent.trim().length, 0) / links.length;
-        if (avgLength < 50) {
-          lists.push({
-            name: this.getListName(ul),
-            count: links.length,
-            items: links.slice(0, 10).map(a => a.textContent.trim())
-          });
-        }
-      }
-    }
-
-    return lists;
-  }
-
-  detectCardGrids(container) {
-    const grids = [];
-
-    // Use recursive search to find grids nested in this region
-    const gridContainers = this.findCardGridContainers(container);
-
-    for (const gridContainer of gridContainers) {
-      const candidates = this.findRepeatedItemCandidates(gridContainer);
-
-      for (const group of candidates) {
-        if (group.items.length >= 3) {
-          const preview = this.extractCardPreview(group.items[0]);
-          grids.push({
-            type: group.type,
-            count: group.items.length,
-            preview: preview
-          });
-        }
-      }
-    }
-
-    return grids;
-  }
-
-  findRepeatedItemCandidates(container) {
-    const children = Array.from(container.children);
-    const features = new Map();
-
-    for (const child of children) {
-      const feature = this.computeElementFeature(child);
-      if (!feature) continue;
-
-      const sig = feature.signature;
-      if (!features.has(sig)) features.set(sig, []);
-      features.get(sig).push({ element: child, feature });
-    }
-
-    const groups = [];
-    for (const [sig, items] of features) {
-      if (items.length >= 3) {
-        groups.push({
-          signature: sig,
-          type: this.classifyGroupType(items[0].feature),
-          items: items.map(i => i.element)
-        });
-      }
-    }
-
-    return groups;
-  }
-
-  computeElementFeature(element) {
-    const rect = element.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return null;
-
-    const hasImage = !!element.querySelector('img');
-    const hasLink = !!element.querySelector('a[href]');
-    const hasButton = !!element.querySelector('button');
-    const textLength = element.textContent.trim().length;
-
-    const w = Math.round(rect.width / 20) * 20;
-    const h = Math.round(rect.height / 20) * 20;
-
-    const signature = `${element.tagName}:${w}x${h}:${hasImage}:${hasLink}:${hasButton}`;
-
-    return { tag: element.tagName.toLowerCase(), width: rect.width, height: rect.height, hasImage, hasLink, hasButton, textLength, signature };
-  }
-
-  classifyGroupType(feature) {
-    if (feature.hasImage && feature.height > 200) return 'card_grid';
-    if (feature.hasLink && feature.textLength < 100) return 'nav_list';
-    if (feature.hasImage && feature.height < 150) return 'thumbnail_strip';
-    return 'repeated_items';
-  }
-
-  detectPriceBlocks(container) {
-    const blocks = [];
-    const priceElements = Array.from(container.querySelectorAll('[class*="price"], [class*="cost"], [class*="promo"]'));
-
-    for (const el of priceElements) {
-      const text = el.textContent.trim();
-      if (text.match(/\$[\d,]+/) || text.toLowerCase().includes('price')) {
-        blocks.push({ text: text.substring(0, 100) });
-      }
-    }
-
-    return blocks.slice(0, 5);
-  }
-
-  detectFeatureList(container) {
-    const features = [];
-    const bullets = Array.from(container.querySelectorAll('li, [class*="feature"]'));
-
-    for (const item of bullets) {
-      const text = item.textContent.trim();
-      if (text.length > 10 && text.length < 200) {
-        features.push(text);
-      }
-    }
-
-    return features;
-  }
-
-  looksLikeProductPage() {
-    return !!document.querySelector('[itemtype*="Product"], [class*="product-detail"], #product');
-  }
-
-  getListName(ul) {
-    const prev = ul.previousElementSibling;
-    if (prev && /^h[1-6]$/i.test(prev.tagName)) {
-      return prev.textContent.trim();
-    }
-    return ul.getAttribute('aria-label') || 'Navigation';
-  }
-
-  extractCardPreview(card) {
-    const title = card.querySelector('h1, h2, h3, h4, [class*="title"], [class*="name"]');
-    const image = card.querySelector('img');
-
-    return {
-      title: title ? title.textContent.trim().substring(0, 60) : null,
-      has_image: !!image
-    };
-  }
-
-  formatAsRegionsYAML(result) {
-    const lines = ['PAGE:'];
-
-    for (const region of result.regions) {
-      lines.push(`  ${region.id}:`);
-      lines.push(`    type: ${region.kind}`);
-
-      if (region.title) lines.push(`    title: "${region.title}"`);
-
-      if (region.nav_lists) {
-        lines.push(`    nav_lists:`);
-        for (const list of region.nav_lists) {
-          lines.push(`      - name: "${list.name}"`);
-          lines.push(`        count: ${list.count}`);
-        }
-      }
-
-      if (region.card_grids) {
-        lines.push(`    card_grids:`);
-        for (const grid of region.card_grids) {
-          lines.push(`      - type: ${grid.type}`);
-          lines.push(`        count: ${grid.count}`);
-          if (grid.preview && grid.preview.title) {
-            lines.push(`        example: "${grid.preview.title}"`);
-          }
-        }
-      }
-
-      if (region.price_blocks) {
-        lines.push(`    price_blocks:`);
-        for (const block of region.price_blocks.slice(0, 3)) {
-          lines.push(`      - "${block.text}"`);
-        }
-      }
-
-      if (region.feature_list) {
-        lines.push(`    features:`);
-        for (const feature of region.feature_list.slice(0, 3)) {
-          lines.push(`      - "${feature}"`);
-        }
-      }
-
-      if (region.description) {
-        lines.push(`    text: "${region.description}"`);
-      }
-    }
-
-    if (result.links.length > 0) {
-      lines.push('');
-      lines.push('QUICK_LINKS:');
-      for (const link of result.links.slice(0, 20)) {
-        lines.push(`  ${link.id}: "${link.text}" → ${link.href.substring(0, 60)}`);
-      }
-    }
-
-    return lines.join('\n');
   }
 }
 
@@ -4204,13 +2778,13 @@ const THEME_PRESETS = {
   "dark_hacker": {
     name: "🖤 Dark Hacker",
     css: `
-      * {
-        background: #0a0a0a !important;
-        color: #00ff00 !important;
+      * { 
+        background: #0a0a0a !important; 
+        color: #00ff00 !important; 
         font-family: 'Courier New', monospace !important;
       }
       a { color: #00ffff !important; }
-      body::before {
+      body::before { 
         content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="50" font-size="10" fill="%23003300">01010101</text></svg>');
         opacity: 0.1; pointer-events: none; z-index: -1;
@@ -4218,9 +2792,9 @@ const THEME_PRESETS = {
     `
   },
   "retro_80s": {
-    name: "📼 Retro 80s",
+    name: "📼 Retro 80s", 
     css: `
-      * {
+      * { 
         background: linear-gradient(45deg, #ff0080, #8000ff) !important;
         color: #ffffff !important;
         font-family: 'Arial Black', sans-serif !important;
@@ -4233,14 +2807,14 @@ const THEME_PRESETS = {
   "rainbow_party": {
     name: "🌈 Rainbow Party",
     css: `
-      body {
+      body { 
         background: linear-gradient(45deg, red, orange, yellow, green, blue, indigo, violet) !important;
         background-size: 400% 400% !important;
         animation: rainbowShift 3s ease infinite !important;
       }
-      @keyframes rainbowShift {
-        0%, 100% { background-position: 0% 50%; }
-        50% { background-position: 100% 50%; }
+      @keyframes rainbowShift { 
+        0%, 100% { background-position: 0% 50%; } 
+        50% { background-position: 100% 50%; } 
       }
       * { color: white !important; text-shadow: 1px 1px 2px black !important; }
     `
@@ -4279,7 +2853,7 @@ const THEME_PRESETS = {
       }
       a { color: #00ffff !important; }
       body {
-        background-image:
+        background-image: 
           linear-gradient(90deg, transparent 79px, #abced4 79px, #abced4 81px, transparent 81px),
           linear-gradient(#eee .1em, transparent .1em);
         background-size: 81px 1.2em;
@@ -4306,11 +2880,11 @@ const THEME_PRESETS = {
         font-family: 'Times New Roman', serif !important;
         line-height: 1.4 !important;
       }
-      body {
-        column-count: 2;
-        column-gap: 2em;
-        max-width: 1200px;
-        margin: 0 auto;
+      body { 
+        column-count: 2; 
+        column-gap: 2em; 
+        max-width: 1200px; 
+        margin: 0 auto; 
         padding: 20px;
       }
     `
@@ -4318,11 +2892,6 @@ const THEME_PRESETS = {
 };
 
 // Initialize the automation system
-try {
-  const browserAutomation = new BrowserAutomation();
-  console.log("✅ OpenDia automation system initialized");
-} catch (e) {
-  console.error("❌ Failed to initialize OpenDia automation:", e);
-}
+const browserAutomation = new BrowserAutomation();
 
 } // End of injection guard
